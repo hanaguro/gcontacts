@@ -1,0 +1,21 @@
+[package]
+name = "gcontacts"
+version = "0.1.0"
+edition = "2021"
+
+# 依存関係
+[dependencies]
+google-people1 = "5.0.3" # 最新バージョンを確認してください
+yup-oauth2 = "8.3.0" # 最新バージョンを確認してください
+csv = "1.3.0" # 最新バージョンを確認してください
+tokio = { version = "1.35.0", features = ["full"] } # 最新バージョンを確認してください
+serde = "1.0.193" # 最新バージョンを確認してください
+serde_json = "1.0.108" # 最新バージョンを確認してください
+hyper = { version = "0.14", features = ["full"] } # HTTPクライアントのために必要
+hyper-rustls = "0.22" # HTTPSサポートのために必要
+dirs = "5.0.1" # ホームディレクトリのパス取得のために必要
+
+# 非同期ランタイムの選択
+[features]
+default = ["tokio-full"]
+tokio-full = ["tokio/full"]
