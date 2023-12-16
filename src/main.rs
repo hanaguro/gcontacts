@@ -58,19 +58,39 @@ fn generate_nickname(name: &str, email_count: usize, existing_nicknames: &mut Ha
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 認証を行い、成功すれば処理を続行
-    let auth = get_auth().await?;    
+    let auth = match get_auth().await{
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("認証に失敗しました: {}", e);
+            Err(e)
+        }?
+    };    
 
     // PeopleService（Google People APIクライアント）の初期化
     let service = PeopleService::new(Client::builder().build(HttpsConnector::with_native_roots()), auth);
  
     // Google People APIで取得するフィールドを設定
-    let field_mask = FieldMask::from_str("names,emailAddresses");
+    let field_mask = match FieldMask::from_str("names,emailAddresses") {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("フィールドが取得できません: {}", e);
+            Err(Box::new(e) as Box<dyn std::error::Error>)
+        }?
+    };
  
     // Google People APIを使って連絡先情報を取得
-     let results = service.people().connections_list("people/me") 
+    // resultsはタプル(Response<Body>, ListConnectionsResponse)
+    // doit()の戻り値はResult<(Response<Body>, ListConnectionsResponse)>
+    let results = match service.people().connections_list("people/me") 
        .page_size(1000)
-       .person_fields(field_mask.unwrap())
-       .doit().await?;
+       .person_fields(field_mask)
+       .doit().await {
+           Ok(r) => r,
+           Err(e) => {
+                eprintln!("連絡先情報を取得できませんでした: {}", e);
+	            Err(Box::new(e) as Box<dyn std::error::Error>)
+           }?
+		};
 
     // 生成されたニックネームを格納するHashSet
     let mut existing_nicknames = HashSet::new();
@@ -88,13 +108,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	    .from_path(addressbook_path) {
 	        Ok(w) => w,
 	        Err(e) => {
-	            eprintln!("アドレス帳への書き込みに失敗しました: {}", e);
+	            eprintln!("アドレス帳の初期化に失敗しました: {}", e);
 	            // ここで処理を終了するか、またはエラーを上位に伝播させる
 	            Err(Box::new(e) as Box<dyn std::error::Error>)
 	        }?
 	};
 
     // 取得した連絡先情報に基づいて処理
+    // results.1はListConnectionsResponse型
     if let Some(connections) = results.1.connections {
         for person in connections {
             // 各人物の名前とメールアドレスを取得
@@ -103,6 +124,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
  
             // 名前がある場合のみ処理
             if !names.is_empty() {
+                // nameは&str
+                // display_nameはOption<String>
                 let name = names[0].display_name.as_ref().map(|s| s.as_str()).unwrap_or("default");
                 let email_count = emails.len();
  
@@ -110,15 +133,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for email in emails {
                     let email_address = email.value.unwrap_or_default();
                     let nickname = generate_nickname(&name, email_count, &mut existing_nicknames);
-                    writer.write_record(&[&nickname, name, &email_address])?;
+      			      writer.write_record(&[&nickname, name, &email_address])
+      			          .map_err(|e| {
+      			              eprintln!("アドレス帳への書き込みに失敗しました: {}", e);
+      			              e
+      			          })?;
                 }
             }
         }
     };
  
     // CSVファイルへの書き込みを完了
-    writer.flush()?;
-    println!("アドレス帳がホームディレクトリにエクスポートされました。");
+    writer.flush().map_err(|e| {
+		eprintln!("アドレス帳へ書き込みを完了できませんでした: {}", e);
+		e
+	})?;
 
+    println!("アドレス帳がホームディレクトリにエクスポートされました。");
     Ok(())
 }
