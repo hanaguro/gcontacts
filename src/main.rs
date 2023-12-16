@@ -94,7 +94,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	        }?
 	};
 
- 
     // 取得した連絡先情報に基づいて処理
     if let Some(connections) = results.1.connections {
         for person in connections {
