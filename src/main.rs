@@ -7,21 +7,26 @@
 // and export it to the AddressBook of Alpine Email Program.
 
 // Import necessary crates and modules
-use yup_oauth2::{read_application_secret, authenticator::Authenticator}; // Modules for OAuth2 authentication
+use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_application_secret, authenticator::Authenticator}; // Modules for OAuth2 authentication
 use hyper::client::{Client, HttpConnector}; // For HTTP client operations
 use hyper_rustls::HttpsConnector; // For HTTPS support
 use std::str::FromStr; // For converting strings to types
-use google_people1::{PeopleService, oauth2, FieldMask}; // For using Google People API
+use google_people1::{PeopleService, FieldMask}; // For using Google People API
 use std::collections::HashSet; // For set operations on data
 use csv::WriterBuilder; // For writing CSV files
-use std::io;
-use std::path::Path;
-use std::env;
+use std::io;       // Import the 'io' module for input/output functionality
+use std::path::Path;   // Import the 'Path' module to work with file paths
+use std::env;      // Import the 'env' module to work with environment variables
 
+// Function to print the help message for the application
 fn print_help() {
+    // Print the overall description of the application
     println!("Application Description:");
+    // Explain that the application retrieves contact information using the Google People API
     println!("\tThis application retrieves contact information using Google People API,");
-    println!("\tand exports it in the format of Alpine Email Program's AddressBook to ~/.addressbook.");
+    // Explain that the retrieved information is exported in a specific format to a file in the user's home directory
+    println!("\tand exports it in the format of Alpine Email Program's AddressBook to the user's home directory.");
+    // Placeholder for additional detailed descriptions and usage instructions
     // Write other detailed descriptions and usage instructions here
 }
 
@@ -40,7 +45,7 @@ async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<
     let client = Client::builder().build(HttpsConnector::with_native_roots());
 
     // Construct and return OAuth2 authentication flow
-    let auth = oauth2::InstalledFlowAuthenticator::builder(secret, oauth2::InstalledFlowReturnMethod::HTTPRedirect)
+    let auth = InstalledFlowAuthenticator::builder(secret,  InstalledFlowReturnMethod::HTTPRedirect)
         .persist_tokens_to_disk(token_cache_file)
         .hyper_client(client)
         .build()
