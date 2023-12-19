@@ -1,3 +1,11 @@
+// 著作権 2023, Takahiro Yoshizawa
+// このソースコードの使用は、ライセンスに従って許可されています。
+// ライセンスは、プロジェクトのトップディレクトリにあるLICENSEファイルで見ることができます。
+
+// 作者: Takahiro Yoshizawa
+// 説明: Google People APIを用いて連絡先情報を処理し、
+// Alpine Email ProgramのAddressBookにエクスポートするRustプログラム。
+
 // 必要なクレートとモジュールをインポート
 use yup_oauth2::{read_application_secret, authenticator::Authenticator}; // OAuth2認証用のモジュール
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
@@ -6,6 +14,16 @@ use std::str::FromStr; // 文字列からの型変換サポート用
 use google_people1::{PeopleService, oauth2, FieldMask}; // Google People APIの利用
 use std::collections::HashSet; // データの集合操作用
 use csv::WriterBuilder; // CSVファイル書き込み用
+use std::io;
+use std::path::Path;
+use std::env;
+
+fn print_help() {
+    println!("アプリケーションの説明:");
+    println!("\tこのアプリケーションは、Google People APIを用いて連絡先情報を取得し、");
+    println!("\t~/.addressbookにAlpine Email ProgramのAddressBook形式でエクスポートします。");
+    // その他の詳細な説明や使用方法をここに記述
+}
 
 // Google APIのOAuth2認証を行いAuthenticatorを返す非同期関数
 async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
@@ -57,6 +75,15 @@ fn generate_nickname(name: &str, email_count: usize, existing_nicknames: &mut Ha
 // メイン関数（非同期）
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // コマンドライン引数を取得
+    let args: Vec<String> = env::args().collect();
+
+    // --help オプションのチェック
+    if args.contains(&"--help".to_string()) {
+        print_help();
+        return Ok(());
+    }
+
     // 認証を行い、成功すれば処理を続行
     let auth = match get_auth().await{
         Ok(a) => a,
@@ -102,6 +129,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
  
     let addressbook_path = home_dir.join(".addressbook");
+
+    // ファイルが存在するか確認
+    if Path::new(&addressbook_path).exists() {
+        println!("ファイルが存在します。上書きしますか？ [y/N]");
+        let mut input = String::new();
+        io::stdin().read_line(&mut input)?;
+
+        if input.trim().to_lowercase() != "y" {
+            println!("操作をキャンセルしました。");
+            return Ok(());
+        }
+    }
+
     // CSVファイルライターの初期化（タブ区切り）
 	let mut writer = match WriterBuilder::new()
 	    .delimiter(b'\t')
