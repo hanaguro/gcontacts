@@ -1,45 +1,45 @@
-// 著作権 2023, Takahiro Yoshizawa
-// このソースコードの使用は、ライセンスに従って許可されています。
-// ライセンスは、プロジェクトのトップディレクトリにあるLICENSEファイルで見ることができます。
+// Copyright 2023, Takahiro Yoshizawa
+// Use of this source code is permitted under the license.
+// The license can be viewed in the LICENSE file located in the project's top directory.
 
-// 作者: Takahiro Yoshizawa
-// 説明: Google People APIを用いて連絡先情報を処理し、
-// Alpine Email ProgramのAddressBookにエクスポートするRustプログラム。
+// Author: Takahiro Yoshizawa
+// Description: A Rust program to process contact information using Google People API
+// and export it to the AddressBook of Alpine Email Program.
 
-// 必要なクレートとモジュールをインポート
-use yup_oauth2::{read_application_secret, authenticator::Authenticator}; // OAuth2認証用のモジュール
-use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
-use hyper_rustls::HttpsConnector; // HTTPSサポート用
-use std::str::FromStr; // 文字列からの型変換サポート用
-use google_people1::{PeopleService, oauth2, FieldMask}; // Google People APIの利用
-use std::collections::HashSet; // データの集合操作用
-use csv::WriterBuilder; // CSVファイル書き込み用
+// Import necessary crates and modules
+use yup_oauth2::{read_application_secret, authenticator::Authenticator}; // Modules for OAuth2 authentication
+use hyper::client::{Client, HttpConnector}; // For HTTP client operations
+use hyper_rustls::HttpsConnector; // For HTTPS support
+use std::str::FromStr; // For converting strings to types
+use google_people1::{PeopleService, oauth2, FieldMask}; // For using Google People API
+use std::collections::HashSet; // For set operations on data
+use csv::WriterBuilder; // For writing CSV files
 use std::io;
 use std::path::Path;
 use std::env;
 
 fn print_help() {
-    println!("アプリケーションの説明:");
-    println!("\tこのアプリケーションは、Google People APIを用いて連絡先情報を取得し、");
-    println!("\t~/.addressbookにAlpine Email ProgramのAddressBook形式でエクスポートします。");
-    // その他の詳細な説明や使用方法をここに記述
+    println!("Application Description:");
+    println!("\tThis application retrieves contact information using Google People API,");
+    println!("\tand exports it in the format of Alpine Email Program's AddressBook to ~/.addressbook.");
+    // Write other detailed descriptions and usage instructions here
 }
 
-// Google APIのOAuth2認証を行いAuthenticatorを返す非同期関数
+// Asynchronous function to authenticate with Google API and return Authenticator
 async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
-    // ユーザーのホームディレクトリを取得
-    let home_dir = dirs::home_dir().expect("ホームディレクトリが見つかりません");
-    // 認証情報とトークンキャッシュのファイルパスを設定
+    // Retrieve the user's home directory
+    let home_dir = dirs::home_dir().expect("Home directory not found");
+    // Set the file paths for authentication information and token cache
     let secret_file = home_dir.join(".client_secret.json");
     let token_cache_file = home_dir.join(".token_cache.json");
 
-    // Google APIの認証情報をファイルから読み込み
+    // Read Google API authentication information from file
     let secret = read_application_secret(secret_file).await?;
 
-    // HTTPS対応のHTTPクライアントを構築
+    // Build an HTTP client compatible with HTTPS
     let client = Client::builder().build(HttpsConnector::with_native_roots());
 
-    // OAuth2認証フローを構築して返す
+    // Construct and return OAuth2 authentication flow
     let auth = oauth2::InstalledFlowAuthenticator::builder(secret, oauth2::InstalledFlowReturnMethod::HTTPRedirect)
         .persist_tokens_to_disk(token_cache_file)
         .hyper_client(client)
@@ -49,146 +49,146 @@ async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<
     Ok(auth)
 }
 
-// 与えられた名前とメールアドレスの数に基づきニックネームを生成する関数
+// Function to generate a nickname based on the given name and number of email addresses
 fn generate_nickname(name: &str, email_count: usize, existing_nicknames: &mut HashSet<String>) -> String {
-    // 名前の最後の部分（姓を想定）を取得し、それをベースとするニックネームを作成
-	let last_name_part = name.split_whitespace().last().unwrap_or("Unknown").to_string();
-	let base_nickname = last_name_part;
+    // Obtain the last part of the name (assumed to be the surname) and create a base nickname
+    let last_name_part = name.split_whitespace().last().unwrap_or("Unknown").to_string();
+    let base_nickname = last_name_part;
 
-    // メールアドレスが複数ある場合はユニークなニックネームを生成
-	if email_count > 1 {
-		let mut counter = 1;
-		let mut nickname = format!("{}{:02}", base_nickname, counter);
-		while existing_nicknames.contains(&nickname) {
-			counter += 1;
-			nickname = format!("{}{:02}", base_nickname, counter);
-		}
-		existing_nicknames.insert(nickname.clone());
-		nickname
-	} else {
-        // メールアドレスが1つだけの場合は、ベースのニックネームを使用
-		existing_nicknames.insert(base_nickname.clone());
-		base_nickname
-	}
+    // Generate a unique nickname if there are multiple email addresses
+    if email_count > 1 {
+        let mut counter = 1;
+        let mut nickname = format!("{}{:02}", base_nickname, counter);
+        while existing_nicknames.contains(&nickname) {
+            counter += 1;
+            nickname = format!("{}{:02}", base_nickname, counter);
+        }
+        existing_nicknames.insert(nickname.clone());
+        nickname
+    } else {
+        // Use the base nickname if there is only one email address
+        existing_nicknames.insert(base_nickname.clone());
+        base_nickname
+    }
 }
 
-// メイン関数（非同期）
+// Main function (asynchronous)
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // コマンドライン引数を取得
+    // Retrieve command-line arguments
     let args: Vec<String> = env::args().collect();
 
-    // --help オプションのチェック
+    // Check for --help option
     if args.contains(&"--help".to_string()) {
         print_help();
         return Ok(());
     }
 
-    // 認証を行い、成功すれば処理を続行
+    // Continue processing if authentication succeeds
     let auth = match get_auth().await{
         Ok(a) => a,
         Err(e) => {
-            eprintln!("認証に失敗しました: {}", e);
+            eprintln!("Authentication failed: {}", e);
             Err(e)
         }?
-    };    
+    };
 
-    // PeopleService（Google People APIクライアント）の初期化
+    // Initialize PeopleService (Google People API client)
     let service = PeopleService::new(Client::builder().build(HttpsConnector::with_native_roots()), auth);
- 
-    // Google People APIで取得するフィールドを設定
+
+    // Set fields to be retrieved from Google People API
     let field_mask = match FieldMask::from_str("names,emailAddresses") {
         Ok(f) => f,
         Err(e) => {
-            eprintln!("フィールドが取得できません: {}", e);
+            eprintln!("Failed to retrieve fields: {}", e);
             Err(Box::new(e) as Box<dyn std::error::Error>)
         }?
     };
- 
-    // Google People APIを使って連絡先情報を取得
-    // resultsはタプル(Response<Body>, ListConnectionsResponse)
-    // doit()の戻り値はResult<(Response<Body>, ListConnectionsResponse)>
-    let results = match service.people().connections_list("people/me") 
+
+    // Retrieve contact information using Google People API
+    // results is a tuple (Response<Body>, ListConnectionsResponse)
+    // The return value of doit() is Result<(Response<Body>, ListConnectionsResponse)>
+    let results = match service.people().connections_list("people/me")
        .page_size(1000)
        .person_fields(field_mask)
        .doit().await {
            Ok(r) => r,
            Err(e) => {
-                eprintln!("連絡先情報を取得できませんでした: {}", e);
-	            Err(Box::new(e) as Box<dyn std::error::Error>)
+                eprintln!("Failed to retrieve contact information: {}", e);
+                Err(Box::new(e) as Box<dyn std::error::Error>)
            }?
-		};
+        };
 
-    // 生成されたニックネームを格納するHashSet
+    // HashSet to store generated nicknames
     let mut existing_nicknames = HashSet::new();
-    // CSVファイルの保存場所を指定
+    // Specify the location for saving the CSV file
     let home_dir = dirs::home_dir().ok_or_else(|| {
-        // このブロックはクロージャです。ここでエラーを生成しています
-        eprintln!("ホームディレクトリが見つかりません");
-        Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "ホームディレクトリが見つかりません")) as Box<dyn std::error::Error>
+        // This block is a closure. An error is being generated here.
+        eprintln!("Home directory not found");
+        Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Home directory not found")) as Box<dyn std::error::Error>
     })?;
- 
+
     let addressbook_path = home_dir.join(".addressbook");
 
-    // ファイルが存在するか確認
+    // Check if the file exists
     if Path::new(&addressbook_path).exists() {
-        println!("ファイルが存在します。上書きしますか？ [y/N]");
+        println!("The file exists. Overwrite? [y/N]");
         let mut input = String::new();
         io::stdin().read_line(&mut input)?;
 
         if input.trim().to_lowercase() != "y" {
-            println!("操作をキャンセルしました。");
+            println!("Operation cancelled.");
             return Ok(());
         }
     }
 
-    // CSVファイルライターの初期化（タブ区切り）
-	let mut writer = match WriterBuilder::new()
-	    .delimiter(b'\t')
-	    .from_path(addressbook_path) {
-	        Ok(w) => w,
-	        Err(e) => {
-	            eprintln!("アドレス帳の初期化に失敗しました: {}", e);
-	            // ここで処理を終了するか、またはエラーを上位に伝播させる
-	            Err(Box::new(e) as Box<dyn std::error::Error>)
-	        }?
-	};
+    // Initialize the CSV file writer (tab-separated)
+    let mut writer = match WriterBuilder::new()
+        .delimiter(b'\t')
+        .from_path(addressbook_path) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Failed to initialize address book: {}", e);
+                // Here the process ends, or the error is propagated upwards
+                Err(Box::new(e) as Box<dyn std::error::Error>)
+            }?
+    };
 
-    // 取得した連絡先情報に基づいて処理
-    // results.1はListConnectionsResponse型
+    // Process based on retrieved contact information
+    // results.1 is of type ListConnectionsResponse
     if let Some(connections) = results.1.connections {
         for person in connections {
-            // 各人物の名前とメールアドレスを取得
+            // Retrieve each person's name and email addresses
             let names = person.names.unwrap_or_else(Vec::new);
             let emails = person.email_addresses.unwrap_or_else(Vec::new);
- 
-            // 名前がある場合のみ処理
+
+            // Process only if there are names
             if !names.is_empty() {
-                // nameは&str
-                // display_nameはOption<String>
+                // name is &str
+                // display_name is Option<String>
                 let name = names[0].display_name.as_ref().map(|s| s.as_str()).unwrap_or("default");
                 let email_count = emails.len();
- 
-                // 各メールアドレスにニックネームを割り当て、CSVに書き込む
+
+                // Assign nicknames to each email address and write to CSV
                 for email in emails {
                     let email_address = email.value.unwrap_or_default();
                     let nickname = generate_nickname(&name, email_count, &mut existing_nicknames);
-      			      writer.write_record(&[&nickname, name, &email_address])
-      			          .map_err(|e| {
-      			              eprintln!("アドレス帳への書き込みに失敗しました: {}", e);
-      			              e
-      			          })?;
+                      writer.write_record(&[&nickname, name, &email_address])
+                          .map_err(|e| {
+                              eprintln!("Failed to write to the address book: {}", e);
+                              e
+                          })?;
                 }
             }
         }
     };
- 
-    // CSVファイルへの書き込みを完了
-    writer.flush().map_err(|e| {
-		eprintln!("アドレス帳へ書き込みを完了できませんでした: {}", e);
-		e
-	})?;
 
-    println!("アドレス帳がホームディレクトリにエクスポートされました。");
+    // Complete writing to the CSV file
+    writer.flush().map_err(|e| {
+        eprintln!("Failed to complete writing to the address book: {}", e);
+        e
+    })?;
+
+    println!("The address book has been exported to the home directory.");
     Ok(())
 }
