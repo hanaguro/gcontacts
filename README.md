@@ -1,10 +1,10 @@
 # gcontacts
 
-# 概要
+## 概要
 Google ContactsからAlpine Email Program( https://alpineapp.email/ )のAddressBookを取得します。
 ダウンロードのみで同期はしません。
 
-# インストール方法
+## インストール方法
 Google Cloud Platformでのclient_secret.jsonの取得手順
 Google Cloud Platformにログイン:
 
@@ -40,9 +40,9 @@ client_secret.jsonのダウンロード:
 Google Cloud Platformでの作業は、課金が発生する可能性があるため、利用規約と料金に注意してください。
 client_secret.jsonに含まれる情報は機密情報です。安全に管理し、公開リポジトリにアップロードしないようにしてください。
 
-# ライセンス
-「このプロジェクトはApache License 2.0の下でライセンスされています。詳細はLICENSEファイルをご覧ください。」
+## ライセンス
+このプロジェクトはApache License 2.0の下でライセンスされています。詳細はLICENSEファイルをご覧ください。
 
-# 著者
+## 著者
 Takahiro Yoshizawa
 
