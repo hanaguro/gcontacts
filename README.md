@@ -35,7 +35,7 @@ APIダッシュボードの左側のメニューで「認証情報」を選択�
 ### アプリケーションにclient_secret.jsonを統合:
 ダウンロードしたclient_secret.jsonを、ホームディレクトリの.gcontacts/client_secret.jsonに配置します。
 
-#### 注意事項
+### 注意事項
 Google Cloud Platformでの作業は、課金が発生する可能性があるため、利用規約と料金に注意してください。
 client_secret.jsonに含まれる情報は機密情報です。安全に管理し、公開リポジトリにアップロードしないようにしてください。
 
