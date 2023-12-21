@@ -1,10 +1,16 @@
-// Copyright 2023, Takahiro Yoshizawa
-// Use of this source code is permitted under the license.
-// The license can be viewed in the LICENSE file located in the project's top directory.
-
-// Author: Takahiro Yoshizawa
-// Description: A Rust program to process contact information using Google People API
-// and export it to the AddressBook of Alpine Email Program.
+// Copyright 2023 Takahiro Yoshizawa
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use fluent::{bundle::FluentBundle, FluentResource}; // ローカライゼーション機能を提供するfluentクレート関連モジュール
 use intl_memoizer::concurrent::IntlLangMemoizer; // 国際化機能を提供するintl_memoizerクレートのモジュール
