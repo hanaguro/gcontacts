@@ -1,7 +1,7 @@
 gcontacts
 
 概要
-Google ContactsからAlpine Email Program(https://alpineapp.email/)のAddressBookを取得します。
+Google ContactsからAlpine Email Program( https://alpineapp.email/ )のAddressBookを取得します。
 ダウンロードのみで同期はしません。
 
 インストール方法
