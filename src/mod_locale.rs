@@ -1,3 +1,11 @@
+// Copyright 2023, Takahiro Yoshizawa
+// Use of this source code is permitted under the license.
+// The license can be viewed in the LICENSE file located in the project's top directory.
+
+// Author: Takahiro Yoshizawa
+// Description: A Rust program to process contact information using Google People API
+// and export it to the AddressBook of Alpine Email Program.
+
 use std::env; // 環境変数を扱うための 'env' モジュールをインポート
 
 pub fn get_locale_from_env() -> String {

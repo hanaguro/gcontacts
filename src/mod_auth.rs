@@ -1,3 +1,11 @@
+// Copyright 2023, Takahiro Yoshizawa
+// Use of this source code is permitted under the license.
+// The license can be viewed in the LICENSE file located in the project's top directory.
+
+// Author: Takahiro Yoshizawa
+// Description: A Rust program to process contact information using Google People API
+// and export it to the AddressBook of Alpine Email Program.
+
 use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_application_secret, authenticator::Authenticator}; // OAuth2認証のためのモジュール
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
 use hyper_rustls::HttpsConnector; // HTTPSサポート用

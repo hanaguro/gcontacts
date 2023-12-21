@@ -9,8 +9,8 @@
 // 必要なクレートとモジュールをインポートする
 use hyper::client::Client; // HTTPクライアント操作用
 use hyper_rustls::HttpsConnector; // HTTPSサポート用
-use std::str::FromStr; // 文字列を型に変換するため
 use google_people1::{PeopleService, FieldMask}; // Google People APIを使用するため
+use std::str::FromStr; // 文字列を型に変換するため
 use std::collections::HashSet; // データに対する集合演算用
 use csv::WriterBuilder; // CSVファイルを書き込むため
 use std::io; // 入出力機能のための 'io' モジュールをインポート
