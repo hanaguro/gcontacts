@@ -1,4 +1,4 @@
-#gcontacts
+gcontacts
 
 概要
 Google ContactsからAlpine Email Program( https://alpineapp.email/ )のAddressBookを取得します。
