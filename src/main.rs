@@ -65,7 +65,7 @@ fn generate_nickname(name: &str, email_count: usize, existing_nicknames: &mut Ha
 
 // 非同期のメイン関数
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main(){
     // ロケールの設定（コマンドライン引数、環境変数、既定値などから）
     // LANG環境変数からロケールを取得する
     let locale = mod_locale::get_locale_from_env();
@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.contains(&"--help".to_string()) {
         // ヘルプメッセージを表示
         print_help(&bundle);
-        return Ok(());
+        std::process::exit(1);
     }
 
     // 認証が成功した場合の処理を続行
@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "auth-error"), e);
-            return Err(e)
+            std::process::exit(1);
         }
     };
 
@@ -95,34 +95,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = PeopleService::new(Client::builder().build(HttpsConnector::with_native_roots()), auth);
 
     // Google People APIから取得するフィールドを設定
-    let field_mask = match FieldMask::from_str("names,emailAddresses") {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "field-error"), e);
-            return Err(Box::new(e) as Box<dyn std::error::Error>)
-        }
-    };
+    let field_mask = FieldMask::from_str("names,emailAddresses").unwrap(); // 失敗したらパニック
 
     // Google People APIを使用して連絡先情報を取得
     // resultsは(Response<Body>, ListConnectionsResponse)のタプル
-    let results = match service.people().connections_list("people/me")
+    let results = service.people().connections_list("people/me")
         .page_size(1000)
         .person_fields(field_mask)
-        .doit().await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "fail-contact"), e);
-                return Err(Box::new(e) as Box<dyn std::error::Error>)
-            }
-        };
+        .doit().await.unwrap_or_else(|e|{
+            eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "fail-contact"), e);
+            std::process::exit(1);
+        });
+
 
     // 生成されたニックネームを格納するHashSet
     let mut existing_nicknames = HashSet::new();
     // CSVファイルの保存場所を指定
-    let home_dir = dirs::home_dir().ok_or_else(|| {
+    let home_dir = dirs::home_dir().unwrap_or_else(|| {
         eprintln!("{}",mod_fluent::get_translation(&bundle, "home-notfound"));
-        Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, mod_fluent::get_translation(&bundle, "home-notfound"))) as Box<dyn std::error::Error>
-    })?;
+        std::process::exit(1);
+    });
+
 
     let addressbook_path = home_dir.join(".addressbook");
 
@@ -130,24 +123,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if Path::new(&addressbook_path).exists() {
         println!("{}",mod_fluent::get_translation(&bundle, "overwrite-or-not"));
         let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
+        if let Err(e) = io::stdin().read_line(&mut input) {
+            eprintln!("{}: {}",mod_fluent::get_translation(&bundle, "input-error"), e);
+            std::process::exit(1);
+        };
 
         if input.trim().to_lowercase() != "y" {
             println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
-            return Ok(());
+            std::process::exit(1);
         }
     }
 
     // CSVファイルライター（タブ区切り）を初期化
-    let mut writer = match WriterBuilder::new()
+    let mut writer = WriterBuilder::new()
         .delimiter(b'\t')
-        .from_path(addressbook_path) {
-            Ok(w) => w,
-            Err(e) => {
-                eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "init-error"), e);
-                return Err(Box::new(e) as Box<dyn std::error::Error>)
-            }
-    };
+        .from_path(addressbook_path).unwrap_or_else(|e| {
+            eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "init-error"), e);
+            std::process::exit(1);
+        });
+
 
     // 取得した連絡先情報に基づいて処理
     if let Some(connections) = results.1.connections {
@@ -165,23 +159,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for email in emails {
                     let email_address = email.value.unwrap_or_default();
                     let nickname = generate_nickname(&name, email_count, &mut existing_nicknames);
-                    writer.write_record(&[&nickname, name, &email_address])
-                        .map_err(|e| {
-                            eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "write-error"), e);
-                            e
-                        })?;
+                    if let Err(e) = writer.write_record(&[&nickname, name, &email_address]) {
+                       eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "write-error"), e);
+                       std::process::exit(1);
+                    }
                 }
             }
         }
     };
 
     // CSVファイルへの書き込みを完了
-    writer.flush().map_err(|e| {
+    if let Err(e) = writer.flush() {
         eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "flush-error"), e);
-        e
-    })?;
+        std::process::exit(1);
+    };
+
 
     // 書き込み完了メッセージを表示
     println!("{}", mod_fluent::get_translation(&bundle, "export-complete"));
-    Ok(())
 }
