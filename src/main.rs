@@ -87,8 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(a) => a,
         Err(e) => {
             eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "auth-error"), e);
-            Err(e)
-        }?
+            return Err(e)
+        }
     };
 
     // PeopleService（Google People APIクライアント）を初期化
@@ -99,8 +99,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(f) => f,
         Err(e) => {
             eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "field-error"), e);
-            Err(Box::new(e) as Box<dyn std::error::Error>)
-        }?
+            return Err(Box::new(e) as Box<dyn std::error::Error>)
+        }
     };
 
     // Google People APIを使用して連絡先情報を取得
@@ -112,8 +112,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(r) => r,
             Err(e) => {
                 eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "fail-contact"), e);
-                Err(Box::new(e) as Box<dyn std::error::Error>)
-            }?
+                return Err(Box::new(e) as Box<dyn std::error::Error>)
+            }
         };
 
     // 生成されたニックネームを格納するHashSet
@@ -145,8 +145,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(w) => w,
             Err(e) => {
                 eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "init-error"), e);
-                Err(Box::new(e) as Box<dyn std::error::Error>)
-            }?
+                return Err(Box::new(e) as Box<dyn std::error::Error>)
+            }
     };
 
     // 取得した連絡先情報に基づいて処理
