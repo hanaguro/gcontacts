@@ -10,3 +10,4 @@ home-notfound = Home directory not found.
 fail-contact = Failed to retrieve contact information.
 field-error = Failed to retrieve fields.
 auth-error = Authentication failed.
+input-eror = Failed to input.

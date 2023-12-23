@@ -10,3 +10,4 @@ home-notfound = ホームディレクトリが見つかりません。
 fail-contact = 連絡先情報の取得に失敗しました。
 field-error = フィールドの取得に失敗しました。
 auth-error = 認証に失敗しました。
+input-eror = 入力に失敗しました。
