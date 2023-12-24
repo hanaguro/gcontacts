@@ -16,7 +16,7 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_app
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
 use hyper_rustls::HttpsConnector; // HTTPSサポート用
 
-// Google APIとの認証を行いAuthenticatorを返す非同期関数
+/// Google APIとの認証を行いAuthenticatorを返す非同期関数
 pub async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
     // ユーザーのホームディレクトリを取得
     let home_dir = dirs::home_dir().expect("Home directory not found");

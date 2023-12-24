@@ -16,6 +16,7 @@ use fluent::{bundle::FluentBundle, FluentResource}; // ローカライゼーシ�
 use intl_memoizer::concurrent::IntlLangMemoizer; // 国際化機能を提供するintl_memoizerクレートのモジュール
 use std::fs; // ファイルシステム操作のための標準ライブラリのモジュール
 
+/// ロケールの指定とFTLファイルの読み込みを行いFluentBundleを作成する
 // intl_memoizer::concurrent::IntlLangMemoizerを型引数として指定
 pub fn init_fluent_bundle(locale: &str) -> FluentBundle<FluentResource, IntlLangMemoizer> {
     // 指定されたロケールに対応するFTLファイルのパスを構築
@@ -42,7 +43,7 @@ pub fn init_fluent_bundle(locale: &str) -> FluentBundle<FluentResource, IntlLang
     bundle
 }
 
-// 翻訳メッセージを取得する関数
+/// 翻訳メッセージを取得する関数
 pub fn get_translation(bundle: &FluentBundle<FluentResource, IntlLangMemoizer>, message_id: &str) -> String {
     let message = bundle.get_message(message_id).expect("Message doesn't exist.");
     let pattern = message.value().expect("Message has no value.");

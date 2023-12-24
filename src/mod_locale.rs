@@ -14,6 +14,7 @@
 
 use std::env; // 環境変数を扱うための 'env' モジュールをインポート
 
+/// 環境変数からロケール設定を取得する
 pub fn get_locale_from_env() -> String {
     // 環境変数 'LANG' からロケール設定を取得する
     if let Ok(lang) = env::var("LANG") {
@@ -40,7 +41,7 @@ pub fn get_locale_from_env() -> String {
     }
 }
 
-// ロケールコードの形式が有効かどうかをチェックするヘルパー関数
+/// ロケールコードの形式が有効かどうかをチェックするヘルパー関数
 fn is_valid_locale_format(code: &str) -> bool {
     // ロケールコードを '-' で分割して部分文字列のベクトルを生成
     let parts: Vec<&str> = code.split('-').collect();
