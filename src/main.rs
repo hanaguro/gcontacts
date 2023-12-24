@@ -161,16 +161,11 @@ async fn main(){
             std::process::exit(1);
         });
 
-
-    // 生成されたニックネームを格納するVec
-    let mut existing_nicknames = Vec::new();
-
     // CSVファイルの保存場所を指定
     let home_dir = dirs::home_dir().unwrap_or_else(|| {
         eprintln!("{}",mod_fluent::get_translation(&bundle, "home-notfound"));
         std::process::exit(1);
     });
-
 
     let addressbook_path = home_dir.join(".addressbook");
 
@@ -197,27 +192,26 @@ async fn main(){
             std::process::exit(1);
         });
 
-
     // 取得した連絡先情報に基づいて処理
     if let Some(connections) = results.1.connections {
         for person in connections {
-            // 各人物のニックネームと名前とメールアドレスを取得
-            let mut nicknames = person.nicknames.unwrap_or_else(Vec::new);
-            if nicknames.is_empty() {
-                nicknames = Vec::new();
-            }
+            // 生成されたニックネームを格納するVec
+            let mut existing_nicknames = Vec::new();
+
+            // Google Contactsから各人物のニックネームと名前とメールアドレスを取得
+            let nicknames = person.nicknames.unwrap_or_else(Vec::new);
             let names = person.names.unwrap_or_else(Vec::new);
             let emails = person.email_addresses.unwrap_or_else(Vec::new);
 
             // 名前が存在する場合のみ処理
             if !names.is_empty() {
-                if nicknames.len() != 0 {
-                    let nickname = nicknames[0].value.as_ref().map(|s| s.as_str()).unwrap_or("");
-                    if nickname != "" {
-                        existing_nicknames.insert(0, nickname.to_string());
+                if !nicknames.is_empty(){
+                    // Google Contactsに登録されている最初のニックネームを取得する
+                    let nickname_from_g = nicknames[0].value.as_ref().map(|s| s.as_str()).unwrap_or("");
+                    // nickname_from_gが空文字の場合はニックネームとみなさない
+                    if !nickname_from_g.is_empty() {
+                        existing_nicknames.push(nickname_from_g.to_string());
                     }
-                }else{
-                    existing_nicknames = Vec::new();
                 }
 
                 let name = names[0].display_name.as_ref().map(|s| s.as_str()).unwrap_or("default");
