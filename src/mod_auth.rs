@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// Google APIへのOAuth2認証を行う
+
 use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_application_secret, authenticator::Authenticator}; // OAuth2認証のためのモジュール
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
 use hyper_rustls::HttpsConnector; // HTTPSサポート用

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// システムの環境変数からロケール設定を取得する
+
 use std::env; // 環境変数を扱うための 'env' モジュールをインポート
 
 /// 環境変数からロケール設定を取得する

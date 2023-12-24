@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/// ローカライゼーション（言語翻訳と地域設定の適用）機能を提供する
+
 use fluent::{bundle::FluentBundle, FluentResource}; // ローカライゼーション機能を提供するfluentクレート関連モジュール
 use intl_memoizer::concurrent::IntlLangMemoizer; // 国際化機能を提供するintl_memoizerクレートのモジュール
 use std::fs; // ファイルシステム操作のための標準ライブラリのモジュール
