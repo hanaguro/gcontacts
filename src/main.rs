@@ -149,7 +149,7 @@ async fn main(){
     let service = PeopleService::new(Client::builder().build(HttpsConnector::with_native_roots()), auth);
 
     // Google People APIから取得するフィールドを設定
-    let field_mask = FieldMask::from_str("nicknames,names,emailAddresses").unwrap(); // 失敗したらパニック
+    let field_mask = FieldMask::from_str("nicknames,names,emailAddresses,biographies").unwrap(); // 失敗したらパニック
 
     // Google People APIを使用して連絡先情報を取得
     // resultsは(Response<Body>, ListConnectionsResponse)のタプル
@@ -202,6 +202,7 @@ async fn main(){
             let nicknames = person.nicknames.unwrap_or_else(Vec::new);
             let names = person.names.unwrap_or_else(Vec::new);
             let emails = person.email_addresses.unwrap_or_else(Vec::new);
+            let biographies = person.biographies.unwrap_or_else(Vec::new);
 
             // 名前が存在する場合のみ処理
             if !names.is_empty() {
@@ -214,14 +215,29 @@ async fn main(){
                     }
                 }
 
-                let name = names[0].display_name.as_ref().map(|s| s.as_str()).unwrap_or("default");
+                // 名前を取得する
+                let name;
+                if !names.is_empty() {
+                    name = names[0].display_name.as_ref().map(|s| s.as_str()).unwrap_or("default");
+                }else{
+                    name = "";
+                }
+
+                // メモ欄の内容を取得する
+                let memo;
+                if !biographies.is_empty() {
+                    memo = biographies[0].value.as_ref().map(|s| s.as_str()).unwrap_or("");
+                }else{
+                    memo = "";
+                }
+
                 let email_count = emails.len();
 
                 // 各メールアドレスにニックネームを割り当ててCSVに書き込む
                 for email in emails {
                     let email_address = email.value.unwrap_or_default();
                     let nickname = generate_nickname(&name, email_count, &mut existing_nicknames);
-                    if let Err(e) = writer.write_record(&[&nickname, name, &email_address]) {
+                    if let Err(e) = writer.write_record(&[&nickname, name, &email_address, "", memo]) {
                        eprintln!("{}: {}", mod_fluent::get_translation(&bundle, "write-error"), e);
                        std::process::exit(1);
                     }
