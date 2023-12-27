@@ -18,7 +18,17 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_app
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
 use hyper_rustls::HttpsConnector; // HTTPSサポート用
 
-/// Google APIとの認証を行いAuthenticatorを返す非同期関数
+/// Google APIの認証プロセスを実行し、認証情報を取得する非同期関数。
+///
+/// この関数はユーザーのホームディレクトリからプロジェクト固有のディレクトリを作成し、
+/// そこにGoogle APIの認証情報とトークンキャッシュを保存します。まず、プロジェクトのディレクトリが存在するかを確認し、
+/// 存在しない場合は新しく作成します。次に、`client_secret.json` と `token_cache.json` ファイルのパスを設定し、
+/// `client_secret.json` からGoogle APIの認証情報を読み込みます。その後、HTTPS対応のHTTPクライアントを構築し、
+/// OAuth2認証フローを構築して返します。
+///
+/// # 戻り値
+/// 成功した場合は`Result`型で`Authenticator<HttpsConnector<HttpConnector>>`を返し、
+/// エラーが発生した場合は`Box<dyn std::error::Error>`を返します。
 pub async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
     // ユーザーのホームディレクトリを取得
     let home_dir = dirs::home_dir().expect("Home directory not found");

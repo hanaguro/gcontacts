@@ -18,8 +18,16 @@ use fluent::{bundle::FluentBundle, FluentResource}; // ローカライゼーシ�
 use intl_memoizer::concurrent::IntlLangMemoizer; // 国際化機能を提供するintl_memoizerクレートのモジュール
 use std::fs; // ファイルシステム操作のための標準ライブラリのモジュール
 
-/// ロケールの指定とFTLファイルの読み込みを行いFluentBundleを作成する
-// intl_memoizer::concurrent::IntlLangMemoizerを型引数として指定
+/// 指定されたロケールでFluentBundleを初期化する。
+///
+/// この関数は指定されたロケールに対応するFTLファイルを読み込み、それを使用してFluentBundleを作成します。
+/// 指定されたロケールのファイルが存在しない場合は、デフォルトのロケール（en-US）を使用します。
+///
+/// # 引数
+/// * `locale` - 初期化するロケール。
+///
+/// # 戻り値
+/// 初期化されたFluentBundle<FluentResource, IntlLangMemoizer>。
 pub fn init_fluent_bundle(locale: &str) -> FluentBundle<FluentResource, IntlLangMemoizer> {
     // 指定されたロケールに対応するFTLファイルのパスを構築
     let ftl_path = format!("locales/{}.ftl", locale);
@@ -45,7 +53,17 @@ pub fn init_fluent_bundle(locale: &str) -> FluentBundle<FluentResource, IntlLang
     bundle
 }
 
-/// 翻訳メッセージを取得する関数
+/// FluentBundleを使用して特定のメッセージIDに対応する翻訳を取得する。
+///
+/// この関数は指定されたメッセージIDに対応する翻訳された文字列を取得します。メッセージが存在しない場合や
+/// メッセージに値がない場合はパニックします。
+///
+/// # 引数
+/// * `bundle` - 翻訳を取得するためのFluentBundle。
+/// * `message_id` - 取得したいメッセージのID。
+///
+/// # 戻り値
+/// 翻訳された文字列。
 pub fn get_translation(bundle: &FluentBundle<FluentResource, IntlLangMemoizer>, message_id: &str) -> String {
     let message = bundle.get_message(message_id).expect("Message doesn't exist.");
     let pattern = message.value().expect("Message has no value.");

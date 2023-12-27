@@ -28,7 +28,14 @@ mod mod_locale;
 mod mod_fluent;
 mod mod_auth;
 
-// アプリケーションのヘルプメッセージを表示する関数
+/// アプリケーションのヘルプメッセージを表示する関数。
+///
+/// この関数は、アプリケーションの一般的な説明を出力します。FluentBundleを利用して、
+/// 国際化されたアプリケーションの説明を取得し、表示します。FluentBundleによって指定された
+/// 言語でアプリケーションの説明をフェッチし、表示します。
+///
+/// # 引数
+/// * `bundle` - ローカライズされた文字列と国際化の詳細を含むFluentBundleへの参照。
 fn print_help(bundle: &FluentBundle<FluentResource, IntlLangMemoizer>) {
     // アプリケーションの全体的な説明を表示
     println!("Application Description:");
