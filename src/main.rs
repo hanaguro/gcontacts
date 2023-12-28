@@ -140,7 +140,7 @@ async fn main(){
     if args.contains(&"--help".to_string()) {
         // ヘルプメッセージを表示
         print_help(&bundle);
-        std::process::exit(1);
+        std::process::exit(0);
     }
 
     // 認証が成功した場合の処理を続行
