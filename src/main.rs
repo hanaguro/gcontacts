@@ -202,6 +202,42 @@ fn decode_if_encoded(s: &str) -> Result<String, String> {
     }
 }
 
+/// 与えられたフィールドから `APerson` 構造体を生成し、ベクターに追加する。
+///
+/// この関数は、文字列のベクター（`fields`）を取り、各フィールドをデコードして
+/// `APerson` 構造体を生成します。生成された `APerson` は引数として渡された
+/// `APerson` 構造体のベクター（`persons`）に追加されます。フィールドのデコードに失敗した場合は、
+/// エラーが返されます。
+///
+/// # 引数
+/// * `persons` - `APerson` 構造体を追加するためのベクターへの可変参照。
+/// * `fields` - デコードする必要があるフィールドのベクター。通常はタブ区切りの文字列から分割されたもの。
+///
+/// # 戻り値
+/// `Result<(), Box<dyn std::error::Error>>` - 処理が成功した場合は `Ok(())` を、失敗した場合はエラーを含む `Result` を返します。
+fn get_decoded_apersons(
+    persons: &mut Vec<APerson>,
+    fields: Vec<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // 各フィールドをデコードし、`APerson` 構造体に変換します。
+    let nickname = decode_if_encoded(fields.get(0).unwrap_or(&""))?;
+    let name = decode_if_encoded(fields.get(1).unwrap_or(&""))?;
+    let email = decode_if_encoded(fields.get(2).unwrap_or(&""))?;
+    let fcc = decode_if_encoded(fields.get(3).unwrap_or(&""))?;
+    let biography = decode_if_encoded(fields.get(4).unwrap_or(&""))?;
+
+    // `APerson` 構造体をベクトルに追加します。
+    persons.push(APerson {
+        nickname,
+        name,
+        email,
+        fcc,
+        biography,
+    });
+
+    Ok(())
+}
+
 /// '.addressbook' ファイルからデータを読み込み、APerson構造体のベクターを返す。
 ///
 /// この関数は、指定されたパスの'.addressbook' ファイルを開き、その内容を読み込み、
@@ -213,7 +249,7 @@ fn decode_if_encoded(s: &str) -> Result<String, String> {
 /// # 戻り値
 /// `Result<Vec<APerson>, String>` - 成功した場合はAPersonオブジェクトのベクター、
 /// 失敗した場合はエラーメッセージを含むResultオブジェクト。
-fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, String> {
+fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, Box<dyn std::error::Error>> {
     // `APerson` 構造体のベクトルを初期化します。
     let mut persons: Vec<APerson> = Vec::new();
 
@@ -238,25 +274,15 @@ fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, String> {
                 let fields: Vec<&str> = combined_line.split('\t').collect();
                 // フィールドの数が多すぎる場合はエラーを返します。
                 if fields.len() > 5 {
-                    return Err("1: Record has too many fields".to_string());
+                    // エラーメッセージを Box<dyn Error> に変換して返します。
+                    return Err(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Record has too many fields",
+                    )));
                 }
 
                 // 各フィールドをデコードし、`APerson` 構造体に変換します。
-                let nickname = decode_if_encoded(fields.get(0).unwrap_or(&""))?;
-                let name = decode_if_encoded(fields.get(1).unwrap_or(&""))?;
-                let email = decode_if_encoded(fields.get(2).unwrap_or(&""))?;
-                let fcc = decode_if_encoded(fields.get(3).unwrap_or(&""))?;
-                let biography = decode_if_encoded(fields.get(4).unwrap_or(&""))?;
-
-                // `APerson` 構造体をベクトルに追加します。
-                persons.push(APerson {
-                    nickname,
-                    name,
-                    email,
-                    fcc,
-                    biography,
-                });
-
+                get_decoded_apersons(&mut persons, fields)?;
                 combined_line.clear();
             }
 
@@ -266,25 +292,15 @@ fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, String> {
 
             // フィールドの数が多すぎる場合はエラーを返します。
             if fields.len() > 5 {
-                return Err("2: Record has too many fields".to_string());
+                // エラーメッセージを Box<dyn Error> に変換して返します。
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Record has too many fields",
+                )));
             }
 
             // 各フィールドをデコードし、`APerson` 構造体に変換します。
-            let nickname = decode_if_encoded(fields.get(0).unwrap_or(&""))?;
-            let name = decode_if_encoded(fields.get(1).unwrap_or(&""))?;
-            let email = decode_if_encoded(fields.get(2).unwrap_or(&""))?;
-            let fcc = decode_if_encoded(fields.get(3).unwrap_or(&""))?;
-            let biography = decode_if_encoded(fields.get(4).unwrap_or(&""))?;
-
-            // `APerson` 構造体をベクトルに追加します。
-            persons.push(APerson {
-                nickname,
-                name,
-                email,
-                fcc,
-                biography,
-            });
-
+            get_decoded_apersons(&mut persons, fields)?;
             // 結合された行をクリアして、次の行の処理に備えます。
             combined_line.clear();
         }
