@@ -1,6 +1,6 @@
 [package]
 name = "gcontacts"
-version = "0.2.0"
+version = "0.2.90"
 edition = "2021"
 
 # 依存関係
@@ -19,6 +19,9 @@ serde_json = "1.0.108" # 最新バージョンを確認してください
 hyper = { version = "0.14", features = ["full"] } # HTTPクライアントのために必要
 hyper-rustls = "0.22" # HTTPSサポートのために必要
 dirs = "5.0.1" # ホームディレクトリのパス取得のために必要
+base64 = "0.21.5"
+quoted_printable = "0.4.0"
+regex = "1.10.2"
 
 # 非同期ランタイムの選択
 [features]
