@@ -48,6 +48,8 @@ enum UpdateSource {
 }
 
 // .addressbookの各行に格納されているデータ
+#[derive(PartialEq, Eq)] // remove_related_apersons関数に必要。PartialEqトレイトを実装する。
+#[derive(Clone)] // ここでCloneトレイトを導出する
 struct APerson {
     nickname: String,  // ニックネーム。
     name: String,      // 実名または表示名。
@@ -466,18 +468,33 @@ async fn update_google_contacts(
         None => {
             // 新しいPersonオブジェクトを作成
             let mut new_person = Person::default();
+
+            // 各フィールドの値をAPersonからコピー
             new_person.nicknames = Some(vec![Nickname {
                 value: Some(aperson.nickname.clone()),
                 metadata: None,
                 type_: None,
             }]);
 
-            // 各フィールドの値をAPersonからコピー
+            let first_name;
+            let last_name;
+            let words: Vec<&str> = aperson.name.split_whitespace().collect();
+            if words.len() >= 2 {
+                first_name = words[0];
+                last_name = match words.last() {
+                    Some(s) => s,
+                    None => "",
+                }
+            } else {
+                first_name = aperson.name.as_str();
+                last_name = "";
+            }
+
             new_person.names = Some(vec![Name {
                 display_name: Some(aperson.name.clone()),
                 display_name_last_first: None,
-                family_name: None,
-                given_name: None,
+                family_name: Some(last_name.to_string()),
+                given_name: Some(first_name.to_string()),
                 honorific_prefix: None,
                 honorific_suffix: None,
                 metadata: None,
@@ -517,6 +534,14 @@ async fn update_google_contacts(
             .update_person_fields(field_mask)
             .doit()
             .await?;
+    } else {
+        // resource_nameがない場合は、新規登録を行う
+        service
+            .people()
+            .create_contact(new_gperson.clone())
+            .person_fields(field_mask)
+            .doit()
+            .await?;
     }
     Ok(())
 }
@@ -549,6 +574,17 @@ fn get_related_gpersons<'a>(gpersons: &'a Vec<Person>, email: &String) -> Vec<&'
 
     // 関連するPersonオブジェクトの参照のベクターを返す
     related_persons
+}
+
+fn get_related_apersons<'a>(people: &'a Vec<APerson>, email_to_find: &str) -> Vec<&'a APerson> {
+    people
+        .iter()
+        .filter(|person| person.email == email_to_find)
+        .collect()
+}
+
+fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec<&'a APerson>) {
+    apeople.retain(|ap| !related_apeople.contains(&ap));
 }
 
 // 非同期のメイン関数
@@ -767,15 +803,19 @@ async fn main() {
 
         Select::Sync => {
             // Google Contactsと.adressbookを同期する
+
+            let mut apeople_diarty = false;
+
             // .addressbookからデータを全て取得
-            let apeople = load_addressbook_data(addressbook_path.as_path()).unwrap_or_else(|e| {
-                eprintln!(
-                    "{}: {}",
-                    mod_fluent::get_translation(&bundle, "fail-addressbook"),
-                    e
-                );
-                std::process::exit(1);
-            });
+            let mut apeople =
+                load_addressbook_data(addressbook_path.as_path()).unwrap_or_else(|e| {
+                    eprintln!(
+                        "{}: {}",
+                        mod_fluent::get_translation(&bundle, "fail-addressbook"),
+                        e
+                    );
+                    std::process::exit(1);
+                });
 
             // Google Contactsからデータを全て取得
             let gpersons = results.1.connections.unwrap_or_else(|| {
@@ -786,18 +826,22 @@ async fn main() {
                 std::process::exit(1);
             });
 
-            let mut person_emails: HashSet<String> = HashSet::new();
-            for person in gpersons.clone() {
-                let emails = match person.email_addresses {
+            let mut gperson_emails: HashSet<String> = HashSet::new();
+            for gperson in gpersons.clone() {
+                // gpersonのメールアドレスのvecを取得
+                let emails = match gperson.email_addresses {
                     Some(s) => s,
                     None => continue,
                 };
+
+                // メールアドレスのvecからメールアドレスを取得
                 for email in emails {
+                    // メールアドレスをStringに変換
                     let email_str = match email.value {
                         Some(s) => s,
                         None => continue,
                     };
-                    person_emails.insert(email_str);
+                    gperson_emails.insert(email_str);
                 }
             }
 
@@ -805,10 +849,10 @@ async fn main() {
                 apeople.iter().map(|ap| ap.email.clone()).collect();
 
             // 一方にのみ存在するメールアドレスを特定
-            let unique_to_gpersons = person_emails.difference(&aperson_emails);
-            let unique_to_apeople = aperson_emails.difference(&person_emails);
+            let unique_to_gpersons = gperson_emails.difference(&aperson_emails);
+            let unique_to_apeople = aperson_emails.difference(&gperson_emails);
             // 両方に存在するメールアドレスを特定
-            let common_emails = aperson_emails.intersection(&person_emails);
+            let common_emails = aperson_emails.intersection(&gperson_emails);
 
             for email in unique_to_gpersons {
                 // このメールアドレスはGoogle Contactsにのみ存在し、.addressbookには存在しない。
@@ -843,27 +887,78 @@ async fn main() {
                     continue;
                 }
 
-                if let Some(aperson) = apeople.iter().find(|&ap| &ap.email == email) {
-                    println!("A:ユニークなメールアドレス: {}", email);
-                    println!("対応する名前: {}", aperson.name);
-                    println!("対応するニックネーム: {}", aperson.nickname);
-                    match update_google_contacts(None, &aperson, &service).await {
-                        Ok(()) => {
-                            println!(
-                                "{}",
-                                mod_fluent::get_translation(
-                                    &bundle,
-                                    "update-success-google-contacts"
-                                )
-                            );
+                // このメールアドレスを持つ人物を.addressbookから探す
+                // remove_related_apersons関数との兼ね合いでapeople.clone()を渡す
+                let apeople_clone = apeople.clone();
+                let related_apeople = get_related_apersons(&apeople_clone, email);
+
+                let mut source = UpdateSource::FromGoogle;
+                for aperson in &related_apeople {
+                    // Google Contactsに新規登録するか、.addressbookから削除するかを入力させる
+                    println!(
+                        "{}",
+                        mod_fluent::get_translation(&bundle, "add-g-or-delete-a-mode")
+                    );
+                    println!(
+                        ".addressbook   :{}/{}/{}/{}",
+                        aperson.nickname, aperson.name, aperson.email, aperson.biography
+                    );
+                    // ユーザ入力用バッファ
+                    let mut input = String::new();
+                    if let Err(e) = io::stdin().read_line(&mut input) {
+                        // ユーザ入力でエラー発生
+                        eprintln!(
+                            "{}: {}",
+                            mod_fluent::get_translation(&bundle, "input-error"),
+                            e
+                        );
+                        std::process::exit(0);
+                    }
+
+                    // ユーザ入力によりGoogle Contactsと.addressbookの
+                    // どちらのデータを優先するか決める
+                    if (input.trim().to_lowercase() != "g") && (input.trim().to_lowercase() != "a")
+                    {
+                        println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
+                        std::process::exit(0);
+                    } else if input.trim().to_lowercase() == "g" {
+                        // Google Contactsに追加する
+                        source = UpdateSource::FromGoogle;
+                    } else if input.trim().to_lowercase() == "a" {
+                        // .addressbookから削除する
+                        source = UpdateSource::FromAddressBook;
+                    }
+
+                    // ユーザ入力に従って分岐
+                    match source {
+                        UpdateSource::FromGoogle => {
+                            match update_google_contacts(None, &aperson, &service).await {
+                                Ok(()) => {
+                                    println!(
+                                        "{}",
+                                        mod_fluent::get_translation(
+                                            &bundle,
+                                            "update-success-google-contacts"
+                                        )
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "{}: {}",
+                                        mod_fluent::get_translation(
+                                            &bundle,
+                                            "update-fail-google-contacts"
+                                        ),
+                                        e
+                                    );
+                                    std::process::exit(1);
+                                }
+                            }
                         }
-                        Err(e) => {
-                            eprintln!(
-                                "{}: {}",
-                                mod_fluent::get_translation(&bundle, "update-fail-google-contacts"),
-                                e
-                            );
-                            std::process::exit(1);
+                        UpdateSource::FromAddressBook => {
+                            // .addressbookから削除する
+                            remove_related_apersons(&mut apeople, &related_apeople);
+                            apeople_diarty = true;
                         }
                     }
                 }
@@ -973,7 +1068,7 @@ async fn main() {
                     if (input.trim().to_lowercase() != "g") && (input.trim().to_lowercase() != "a")
                     {
                         println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
-                        std::process::exit(-1);
+                        std::process::exit(0);
                     } else if input.trim().to_lowercase() == "g" {
                         // Google Contactsを優先し、.addressbookを更新する
                         source = UpdateSource::FromGoogle;
@@ -1015,6 +1110,55 @@ async fn main() {
                         }
                     }
                 }
+            }
+
+            if apeople_diarty {
+                // apeopleを.addressbookに書き込む
+                // CSVファイルライター（タブ区切り）を初期化
+                let mut writer = WriterBuilder::new()
+                    .delimiter(b'\t')
+                    .from_path(addressbook_path)
+                    .unwrap_or_else(|e| {
+                        eprintln!(
+                            "{}: {}",
+                            mod_fluent::get_translation(&bundle, "init-error"),
+                            e
+                        );
+                        std::process::exit(1);
+                    });
+
+                // 各apersonをCSVに書き込む
+                for aperson in apeople {
+                    if !aperson.email.is_empty() {
+                        if let Err(e) = writer.write_record(&[
+                            &aperson.nickname,
+                            &aperson.name,
+                            &aperson.email,
+                            &aperson.fcc,
+                            &aperson.biography,
+                        ]) {
+                            eprintln!(
+                                "{}: {}",
+                                mod_fluent::get_translation(&bundle, "write-error"),
+                                e
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                // CSVファイルへの書き込みを完了
+                if let Err(e) = writer.flush() {
+                    eprintln!(
+                        "{}: {}",
+                        mod_fluent::get_translation(&bundle, "flush-error"),
+                        e
+                    );
+                    std::process::exit(1);
+                };
+
+                // 書き込み完了メッセージを表示
+                println!("{}", mod_fluent::get_translation(&bundle, "write-complete"));
             }
         }
     }

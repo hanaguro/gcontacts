@@ -19,3 +19,5 @@ update-done = 連絡先が更新されました。
 update-error = 連絡先の更新中にエラーが発生しました。
 update-success-google-contacts = Google Contactsのデータを更新しました。
 update-fail-google-contacts = Google Contactsのデータを更新に失敗しました。
+add-g-or-delete-a-mode = .addressbookのみに存在するデータがあります。.addressbookから削除する場合は[a]を、Google Contactsに追加する場合は[g]を入力してください。
+write-complete = アドレス帳の書き込みが終了しました。
