@@ -576,15 +576,42 @@ fn get_related_gpersons<'a>(gpersons: &'a Vec<Person>, email: &String) -> Vec<&'
     related_persons
 }
 
+/// 特定のメールアドレスに関連する `APerson` オブジェクトの参照を取得する。
+///
+/// 与えられたメールアドレスと一致する `APerson` オブジェクトを `people` ベクターから探し出し、
+/// それらに関連する `APerson` オブジェクトの参照のベクターを返します。
+///
+/// # 引数
+/// * `people` - `APerson` オブジェクトのベクターへの参照。
+/// * `email_to_find` - 検索するメールアドレス。
+///
+/// # 戻り値
+/// `Vec<&'a APerson>` - 与えられたメールアドレスを持つ `APerson` オブジェクトの参照のベクター。
 fn get_related_apersons<'a>(people: &'a Vec<APerson>, email_to_find: &str) -> Vec<&'a APerson> {
+    // `people` ベクターをイテレートし、条件に合致する `APerson` オブジェクトの参照をフィルタリング
     people
         .iter()
+        // `APerson` オブジェクトの email フィールドが `email_to_find` と一致するか確認
         .filter(|person| person.email == email_to_find)
+        // 条件に合致する `APerson` オブジェクトの参照をベクターとして収集
         .collect()
 }
 
+
+/// 特定の `APerson` オブジェクトを `apeople` ベクターから削除する。
+///
+/// 与えられた `related_apeople` に含まれる `APerson` オブジェクトの参照に一致する
+/// オブジェクトを `apeople` ベクターから削除します。
+///
+/// # 引数
+/// * `apeople` - `APerson` オブジェクトのベクターへの可変参照。
+/// * `related_apeople` - 削除する `APerson` オブジェクトの参照のベクター。
 fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec<&'a APerson>) {
-    apeople.retain(|ap| !related_apeople.contains(&ap));
+    // `apeople` ベクターから `related_apeople` に含まれるオブジェクトを削除
+    apeople.retain(|ap|
+        // `related_apeople` に含まれていない `APerson` オブジェクトだけを保持
+        !related_apeople.contains(&ap)
+    );
 }
 
 // 非同期のメイン関数
@@ -966,14 +993,17 @@ async fn main() {
 
             for email in common_emails {
                 // このメールアドレスは両者共通に存在する
-                let aperson = match apeople.iter().find(|&ap| &ap.email == email) {
+                let apeople_clone = apeople.clone();
+                let aperson = match apeople_clone.iter().find(|&ap| &ap.email == email) {
                     Some(s) => s,
                     None => continue,
                 };
 
+                // このメールアドレスを持つGoogle Contactsの要素だけループする
                 let related_persons = get_related_gpersons(&gpersons, email);
                 for person in related_persons {
-                    let gname;
+                    // 名前を取得
+                    let mut gname;
                     match &person.names {
                         Some(s) => {
                             if s.is_empty() {
@@ -984,10 +1014,27 @@ async fn main() {
                             }
                         }
                         None => {
-                            continue;
+                            gname = "".to_string();
                         }
                     };
 
+                    if gname.is_empty() {
+                        match &person.organizations {
+                            Some(s) => {
+                                if s.is_empty() {
+                                    gname = "".to_string();
+                                } else {
+                                    // ニックネームが複数付いていても最初の1つを使う
+                                    gname = s[0].name.clone().unwrap_or("".to_string());
+                                }
+                            }
+                            None => {
+                                gname = "".to_string();
+                            }
+                        };
+                    }
+
+                    // ニックネームを取得する
                     let gnickname;
                     match &person.nicknames {
                         Some(s) => {
@@ -1003,6 +1050,7 @@ async fn main() {
                         }
                     };
 
+                    // メモを取得する
                     let gbiography;
                     match &person.biographies {
                         Some(s) => {
@@ -1081,7 +1129,18 @@ async fn main() {
                     match source {
                         UpdateSource::FromGoogle => {
                             // .addressbookを更新する
-                            continue;
+                            let fcc = aperson.clone().fcc;
+                            let aperson_clone = aperson.clone();
+                            // .addressbookから該当する値を消す
+                            remove_related_apersons(&mut apeople, &vec![&aperson_clone]);
+                            apeople.push(APerson {
+                                nickname: gnickname,
+                                name: gname,
+                                email: email.to_owned(),
+                                fcc, // フィールド名と変数名が同じ
+                                biography: gbiography,
+                            });
+                            apeople_diarty = true;
                         }
                         UpdateSource::FromAddressBook => {
                             // Google Contactsを更新する
@@ -1128,7 +1187,8 @@ async fn main() {
                     });
 
                 // 各apersonをCSVに書き込む
-                for aperson in apeople {
+                let apeople_clone = apeople.clone();
+                for aperson in apeople_clone {
                     if !aperson.email.is_empty() {
                         if let Err(e) = writer.write_record(&[
                             &aperson.nickname,
