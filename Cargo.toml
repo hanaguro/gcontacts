@@ -1,6 +1,6 @@
 [package]
 name = "gcontacts"
-version = "0.2.90"
+version = "0.3.0"
 edition = "2021"
 
 # 依存関係
