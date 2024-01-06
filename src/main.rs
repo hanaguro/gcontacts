@@ -675,6 +675,7 @@ fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec
 /// # 戻り値
 /// `Option<Vec<Person>>` - 条件に一致するPersonオブジェクトのベクター。
 /// 一致するオブジェクトがない場合は `None` を返す。
+#[allow(dead_code)] // この関数は未使用でも警告を出さない
 fn get_gpersons_from_aperson(gpersons: &Vec<Person>, aperson: &APerson) -> Option<Vec<Person>> {
     // 条件に一致するPersonオブジェクトをフィルタリングして収集
     let filtered_gpersons: Vec<Person> = gpersons
