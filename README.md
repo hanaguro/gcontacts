@@ -5,7 +5,7 @@ Google ContactsからAlpine Email Program( https://alpineapp.email/ )のAddressB
 バージョン0.3.0から同期機能が追加されています。
 
 ## インストール方法
-###Google Cloud Platformでのclient_secret.jsonの取得手順
+### Google Cloud Platformでのclient_secret.jsonの取得手順
 #### Google Cloud Platformにログイン:
 Google Cloud Platformのコンソールにアクセスし、Googleアカウントでログインします。
 
