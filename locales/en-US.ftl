@@ -20,4 +20,5 @@ update-error = An error occurred while updating the contacts.
 update-success-google-contacts = Updated the data for Google Contacts.
 update-fail-google-contacts = Failed to update the data for Google Contacts
 add-g-or-delete-a-mode = Please input [a] if you want to delete data that exists only in .addressbook, or input [g] if you want to add it to Google Contacts.
+add-a-or-delete-g-mode = Please input [g] if you want to delete data that exists only in Google Contacts, or input [a] if you want to add it to .addressbook.
 write-complete = Address book writing has been completed.

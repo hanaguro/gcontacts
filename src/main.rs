@@ -240,6 +240,42 @@ fn get_decoded_apersons(
     Ok(())
 }
 
+/// 与えられた行を解析し、APerson構造体に変換してVecに追加する関数。
+///
+/// この関数は、タブ区切りの文字列（`combined_line`）を取得し、それをフィールドに分割して、
+/// それらのフィールドから`APerson`構造体を作成し、与えられた`APerson`のVec（`persons`）に追加します。
+/// フィールドの数が5つを超える場合はエラーを返します。
+///
+/// # 引数
+/// * `persons` - `APerson`構造体を追加するためのVecへの可変参照。
+/// * `combined_line` - 解析するための行への可変参照。
+///
+/// # 戻り値
+/// `Result<(), Box<dyn std::error::Error>>` - 成功した場合はOk(())、失敗した場合はエラー。
+fn convert_line_to_aperson(
+    mut persons: &mut Vec<APerson>,
+    combined_line: &mut String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // タブで区切られたフィールドに分割
+    let fields: Vec<&str> = combined_line.split('\t').collect();
+
+    // フィールドの数が多すぎる場合はエラーを返す
+    if fields.len() > 5 {
+        // エラーメッセージを Box<dyn Error> に変換して返す
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Record has too many fields",
+        )));
+    }
+
+    // 各フィールドをデコードし、`APerson` 構造体に変換
+    get_decoded_apersons(&mut persons, fields)?;
+    // 結合された行をクリアして、次の行の処理に備える
+    combined_line.clear();
+
+    Ok(())
+}
+
 /// '.addressbook' ファイルからデータを読み込み、APerson構造体のベクターを返す。
 ///
 /// この関数は、指定されたパスの'.addressbook' ファイルを開き、その内容を読み込み、
@@ -272,40 +308,17 @@ fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, Box<dyn std::
             combined_line.push_str(&line);
         } else {
             if !line.starts_with("   ") {
-                // 行を結合せず、前のループの行をタブで分割します。
-                let fields: Vec<&str> = combined_line.split('\t').collect();
-                // フィールドの数が多すぎる場合はエラーを返します。
-                if fields.len() > 5 {
-                    // エラーメッセージを Box<dyn Error> に変換して返します。
-                    return Err(Box::new(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Record has too many fields",
-                    )));
-                }
-
-                // 各フィールドをデコードし、`APerson` 構造体に変換します。
-                get_decoded_apersons(&mut persons, fields)?;
-                combined_line.clear();
+                convert_line_to_aperson(&mut persons, &mut combined_line)?;
             }
 
             combined_line.push_str(&line);
-
-            let fields: Vec<&str> = combined_line.split('\t').collect();
-
-            // フィールドの数が多すぎる場合はエラーを返します。
-            if fields.len() > 5 {
-                // エラーメッセージを Box<dyn Error> に変換して返します。
-                return Err(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Record has too many fields",
-                )));
-            }
-
-            // 各フィールドをデコードし、`APerson` 構造体に変換します。
-            get_decoded_apersons(&mut persons, fields)?;
-            // 結合された行をクリアして、次の行の処理に備えます。
-            combined_line.clear();
+            convert_line_to_aperson(&mut persons, &mut combined_line)?;
         }
+    }
+
+    // ファイルの最後の行がタブ文字で終わっている場合
+    if !combined_line.is_empty() {
+        convert_line_to_aperson(&mut persons, &mut combined_line)?;
     }
 
     // 処理が完了したら、`APerson` 構造体のベクトルを返します。
@@ -546,6 +559,43 @@ async fn update_google_contacts(
     Ok(())
 }
 
+/// 特定のGoogleのPersonオブジェクトを削除する非同期関数。
+///
+/// この関数は、Google People APIを使用してGoogleの連絡先リストから特定のPersonオブジェクトを削除します。
+/// 削除対象のPersonオブジェクトは、その`resource_name`プロパティに基づいて識別されます。
+/// `resource_name`が存在しない場合、関数はエラーを返します。
+///
+/// # 引数
+/// * `gperson` - 削除するPersonオブジェクトへの参照。
+/// * `service` - Google People APIにアクセスするためのPeopleServiceオブジェクトへの参照。
+///
+/// # 戻り値
+/// `Result<(), Box<dyn std::error::Error>>` - 処理が成功した場合はOk(())、
+/// 失敗した場合はエラーを含むResultオブジェクト。
+async fn remove_related_gperson(
+    gperson: &Person,
+    service: &PeopleService<HttpsConnector<HttpConnector>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // gpersonからresource_nameを取得し、その存在をチェック
+    if let Some(resource_name) = gperson.resource_name.as_ref() {
+        // resource_nameが存在する場合、PeopleServiceを使用して削除リクエストを行う
+        service
+            .people()
+            .delete_contact(resource_name)
+            .doit()
+            .await?;
+    } else {
+        // resource_nameが存在しない場合、エラーを返す
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "resource name is empty.",
+        )));
+    }
+
+    // 処理が正常に完了した場合、Ok(())を返す
+    Ok(())
+}
+
 /// 特定のメールアドレスを持つGoogleのPersonオブジェクトを取得する。
 ///
 /// 与えられたメールアドレスと一致するメールアドレスを持つPersonオブジェクトを`gpersons`ベクターから探し出し、
@@ -597,7 +647,6 @@ fn get_related_apersons<'a>(people: &'a Vec<APerson>, email_to_find: &str) -> Ve
         .collect()
 }
 
-
 /// 特定の `APerson` オブジェクトを `apeople` ベクターから削除する。
 ///
 /// 与えられた `related_apeople` に含まれる `APerson` オブジェクトの参照に一致する
@@ -610,8 +659,241 @@ fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec
     // `apeople` ベクターから `related_apeople` に含まれるオブジェクトを削除
     apeople.retain(|ap|
         // `related_apeople` に含まれていない `APerson` オブジェクトだけを保持
-        !related_apeople.contains(&ap)
-    );
+        !related_apeople.contains(&ap));
+}
+
+/// 特定の `APerson` オブジェクトに関連するGoogleのPersonオブジェクトを検索する関数。
+///
+/// この関数は、指定された `APerson` オブジェクトのデータ（ニックネーム、名前、メールアドレス、バイオグラフィ）に基づいて、
+/// Google People APIを通じて取得されたPersonオブジェクトのリスト（`gpersons`）の中から関連するオブジェクトを検索します。
+/// 条件に一致するGoogleのPersonオブジェクトが見つかった場合、それらを含むベクターが返されます。
+///
+/// # 引数
+/// * `gpersons` - GoogleのPersonオブジェクトのベクターへの参照。
+/// * `aperson` - 検索基準となる `APerson` オブジェクトへの参照。
+///
+/// # 戻り値
+/// `Option<Vec<Person>>` - 条件に一致するPersonオブジェクトのベクター。
+/// 一致するオブジェクトがない場合は `None` を返す。
+fn get_gpersons_from_aperson(gpersons: &Vec<Person>, aperson: &APerson) -> Option<Vec<Person>> {
+    // 条件に一致するPersonオブジェクトをフィルタリングして収集
+    let filtered_gpersons: Vec<Person> = gpersons
+        .iter()
+        .filter(|gperson| {
+            // Email と Nickname の条件をチェック
+            let email_match = gperson.email_addresses.as_ref().map_or(false, |emails| {
+                emails
+                    .iter()
+                    .any(|email| email.value.as_ref() == Some(&aperson.email))
+            });
+            let nickname_match = gperson.nicknames.as_ref().map_or(false, |nicknames| {
+                nicknames
+                    .iter()
+                    .any(|nickname| nickname.value.as_ref() == Some(&aperson.nickname))
+            });
+
+            // Name または Organization の条件をチェック
+            let name_match = gperson.names.as_ref().map_or(false, |names| {
+                names
+                    .iter()
+                    .any(|name| name.display_name.as_ref() == Some(&aperson.name))
+            }) || gperson.organizations.as_ref().map_or(false, |orgs| {
+                orgs.iter()
+                    .any(|org| org.name.as_ref() == Some(&aperson.name))
+            });
+
+            let biography_match = gperson.biographies.as_ref().map_or(false, |biographies| {
+                biographies
+                    .iter()
+                    .any(|bio| bio.value.as_ref() == Some(&aperson.biography))
+            });
+
+            // すべての条件が true であれば true を返す
+            email_match && nickname_match && name_match && biography_match
+        })
+        .cloned()
+        .collect();
+
+    // フィルタリングされた結果が空でなければ、その結果を返す
+    if filtered_gpersons.is_empty() {
+        None
+    } else {
+        Some(filtered_gpersons)
+    }
+}
+
+/// GoogleのPersonオブジェクトから名前を取得する関数。
+///
+/// この関数は、指定されたGoogleのPersonオブジェクトから名前を抽出します。Personオブジェクトに名前が存在する場合、
+/// 最初に見つかった名前を返します。名前が存在しない場合は、代わりに所属組織名を返します。どちらも存在しない場合は空文字列を返します。
+///
+/// # 引数
+/// * `person` - 名前を取得するGoogleのPersonオブジェクトへの参照。
+///
+/// # 戻り値
+/// `String` - 取得した名前。名前または所属組織名が存在しない場合は空文字列。
+fn get_gcontact_name(person: &Person) -> String {
+    // 名前を格納する変数を初期化
+    let mut gname;
+
+    // Personオブジェクトのnamesフィールドを確認し、名前が存在するかチェック
+    match &person.names {
+        Some(names) => {
+            // 名前が存在する場合
+            if names.is_empty() {
+                // 名前のリストが空の場合、空文字列を代入
+                gname = "".to_string();
+            } else {
+                // 名前のリストが空でない場合、最初の名前を使用
+                gname = names[0].display_name.clone().unwrap_or_default();
+            }
+        }
+        None => {
+            // 名前が存在しない場合、空文字列を代入
+            gname = "".to_string();
+        }
+    };
+
+    // 名前が空の場合、Personオブジェクトのorganizationsフィールドを確認
+    if gname.is_empty() {
+        match &person.organizations {
+            Some(organizations) => {
+                // 所属組織が存在する場合
+                if organizations.is_empty() {
+                    // 所属組織のリストが空の場合、空文字列を代入
+                    gname = "".to_string();
+                } else {
+                    // 所属組織のリストが空でない場合、最初の所属組織名を使用
+                    gname = organizations[0].name.clone().unwrap_or_default();
+                }
+            }
+            None => {
+                // 所属組織が存在しない場合、空文字列を代入
+                gname = "".to_string();
+            }
+        };
+    }
+
+    // 取得した名前または所属組織名を返す
+    gname
+}
+
+/// GoogleのPersonオブジェクトからニックネームを取得する関数。
+///
+/// この関数は、指定されたGoogleのPersonオブジェクトからニックネームを抽出します。
+/// Personオブジェクトにニックネームが存在する場合、最初に見つかったニックネームを返します。
+/// ニックネームが存在しない場合は空文字列を返します。
+///
+/// # 引数
+/// * `person` - ニックネームを取得するGoogleのPersonオブジェクトへの参照。
+///
+/// # 戻り値
+/// `String` - 取得したニックネーム。ニックネームが存在しない場合は空文字列。
+fn get_gcontact_nickname(person: &Person) -> String {
+    // ニックネームを格納する変数を初期化
+    let gnickname;
+
+    // Personオブジェクトのnicknamesフィールドを確認し、ニックネームが存在するかチェック
+    match &person.nicknames {
+        Some(nicknames) => {
+            // ニックネームが存在する場合
+            if nicknames.is_empty() {
+                // ニックネームのリストが空の場合、空文字列を代入
+                gnickname = "".to_string();
+            } else {
+                // ニックネームのリストが空でない場合、最初のニックネームを使用
+                gnickname = nicknames[0].value.clone().unwrap_or_default();
+            }
+        }
+        None => {
+            // ニックネームが存在しない場合、空文字列を代入
+            gnickname = "".to_string();
+        }
+    };
+
+    // 取得したニックネームを返す
+    gnickname
+}
+
+/// GoogleのPersonオブジェクトからバイオグラフィーを取得する関数。
+///
+/// この関数は、指定されたGoogleのPersonオブジェクトからバイオグラフィー（自己紹介やメモなどの情報）を抽出します。
+/// Personオブジェクトにバイオグラフィーが存在する場合、最初に見つかったバイオグラフィーを返します。
+/// バイオグラフィーが存在しない場合は空文字列を返します。
+///
+/// # 引数
+/// * `person` - バイオグラフィーを取得するGoogleのPersonオブジェクトへの参照。
+///
+/// # 戻り値
+/// `String` - 取得したバイオグラフィー。バイオグラフィーが存在しない場合は空文字列。
+fn get_gcontact_biography(person: &Person) -> String {
+    // バイオグラフィーを格納する変数を初期化
+    let gbiography;
+
+    // Personオブジェクトのbiographiesフィールドを確認し、バイオグラフィーが存在するかチェック
+    match &person.biographies {
+        Some(biographies) => {
+            // バイオグラフィーが存在する場合
+            if biographies.is_empty() {
+                // バイオグラフィーのリストが空の場合、空文字列を代入
+                gbiography = "".to_string();
+            } else {
+                // バイオグラフィーのリストが空でない場合、最初のバイオグラフィーを使用
+                gbiography = biographies[0].value.clone().unwrap_or_default();
+            }
+        }
+        None => {
+            // バイオグラフィーが存在しない場合、空文字列を代入
+            gbiography = "".to_string();
+        }
+    };
+
+    // 取得したバイオグラフィーを返す
+    gbiography
+}
+
+/// ユーザー入力に基づいてデータ更新のソースを選択する関数。
+///
+/// この関数は、ユーザーにGoogle Contactsと.addressbookのどちらをデータ更新のソースとして使用するかを尋ね、
+/// 入力に基づいて適切な `UpdateSource` 列挙型を返します。ユーザーが 'g' を入力した場合は `UpdateSource::FromGoogle` を、
+/// 'a' を入力した場合は `UpdateSource::FromAddressBook` を返します。入力が 'g' または 'a' 以外の場合は、
+/// オペレーションをキャンセルします。
+///
+/// # 引数
+/// * `bundle` - ローカライズされた文字列と国際化の詳細を含むFluentBundleへの参照。
+///
+/// # 戻り値
+/// `UpdateSource` - ユーザーが選択したデータ更新のソース。
+fn input_select_source(bundle: &FluentBundle<FluentResource, IntlLangMemoizer>) -> UpdateSource {
+    // デフォルトのデータソースをGoogleに設定
+    let mut source = UpdateSource::FromGoogle;
+
+    // ユーザー入力を取得するためのバッファ
+    let mut input = String::new();
+    // 標準入力からの読み取りを試み、エラーがあれば処理を終了
+    if let Err(e) = io::stdin().read_line(&mut input) {
+        eprintln!(
+            "{}: {}",
+            mod_fluent::get_translation(&bundle, "input-error"),
+            e
+        );
+        std::process::exit(0);
+    }
+
+    // ユーザー入力により、Google Contactsまたは.addressbookのどちらのデータを優先するか決定
+    if (input.trim().to_lowercase() != "g") && (input.trim().to_lowercase() != "a") {
+        println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
+        std::process::exit(0);
+    } else if input.trim().to_lowercase() == "g" {
+        // Google Contactsを優先し、.addressbookを更新する
+        source = UpdateSource::FromGoogle;
+    } else if input.trim().to_lowercase() == "a" {
+        // .addressbookを優先し、Google Contactsを更新する
+        source = UpdateSource::FromAddressBook;
+    }
+
+    // 選択されたデータソースを返す
+    source
 }
 
 // 非同期のメイン関数
@@ -739,55 +1021,25 @@ async fn main() {
                     // 生成されたニックネームを格納するVec
                     let mut existing_nicknames = Vec::new();
 
-                    // Google Contactsから各人物のニックネームと名前とメールアドレスを取得
-                    let nicknames = person.nicknames.unwrap_or_else(Vec::new);
-                    let names = person.names.unwrap_or_else(Vec::new);
-                    let organizations = person.organizations.unwrap_or_else(Vec::new);
-                    let emails = person.email_addresses.unwrap_or_else(Vec::new);
-                    let biographies = person.biographies.unwrap_or_else(Vec::new);
+                    // Google Contactsから各人物の名前と会社を取得する
+                    let person_clone = person.clone();
+                    let names = person_clone.names.unwrap_or_else(Vec::new);
+                    let organizations = person_clone.organizations.unwrap_or_else(Vec::new);
+                    let emails = person_clone.email_addresses.unwrap_or_else(Vec::new);
 
                     // 名前が存在する場合のみ処理
                     if !names.is_empty() || !organizations.is_empty() {
-                        if !nicknames.is_empty() {
-                            // Google Contactsに登録されている最初のニックネームを取得する
-                            let nickname_from_g = nicknames[0]
-                                .value
-                                .as_ref()
-                                .map(|s| s.as_str())
-                                .unwrap_or("");
-                            // nickname_from_gが空文字の場合はニックネームとみなさない
-                            if !nickname_from_g.is_empty() {
-                                existing_nicknames.push(nickname_from_g.to_string());
-                            }
+                        // ニックネームを取得する
+                        let nickname_from_g = get_gcontact_nickname(&person);
+                        if !nickname_from_g.is_empty() {
+                            existing_nicknames.push(nickname_from_g);
                         }
 
                         // 名前か会社を取得する
-                        let name;
-                        if !names.is_empty() {
-                            name = names[0]
-                                .display_name
-                                .as_ref()
-                                .map(|s| s.as_str())
-                                .unwrap_or("");
-                        } else {
-                            name = organizations[0]
-                                .name
-                                .as_ref()
-                                .map(|s| s.as_str())
-                                .unwrap_or("");
-                        }
+                        let name = get_gcontact_name(&person);
 
                         // メモ欄の内容を取得する
-                        let memo;
-                        if !biographies.is_empty() {
-                            memo = biographies[0]
-                                .value
-                                .as_ref()
-                                .map(|s| s.as_str())
-                                .unwrap_or("");
-                        } else {
-                            memo = "";
-                        }
+                        let memo = get_gcontact_biography(&person);
 
                         let email_count = emails.len();
 
@@ -797,7 +1049,7 @@ async fn main() {
                             let nickname =
                                 generate_nickname(&name, email_count, &mut existing_nicknames);
                             if let Err(e) =
-                                writer.write_record(&[&nickname, name, &email_address, "", memo])
+                                writer.write_record(&[&nickname, &name, &email_address, "", &memo])
                             {
                                 eprintln!(
                                     "{}: {}",
@@ -831,6 +1083,7 @@ async fn main() {
         Select::Sync => {
             // Google Contactsと.adressbookを同期する
 
+            // .addressbook書き込みフラグ
             let mut apeople_diarty = false;
 
             // .addressbookからデータを全て取得
@@ -853,6 +1106,7 @@ async fn main() {
                 std::process::exit(1);
             });
 
+            // .addressbookのメールアドレスと比較するためのHashSet
             let mut gperson_emails: HashSet<String> = HashSet::new();
             for gperson in gpersons.clone() {
                 // gpersonのメールアドレスのvecを取得
@@ -872,6 +1126,7 @@ async fn main() {
                 }
             }
 
+            // Google Contactsのメールアドレスと比較するためのHashSet
             let aperson_emails: HashSet<String> =
                 apeople.iter().map(|ap| ap.email.clone()).collect();
 
@@ -883,26 +1138,69 @@ async fn main() {
 
             for email in unique_to_gpersons {
                 // このメールアドレスはGoogle Contactsにのみ存在し、.addressbookには存在しない。
-                // すべての関連するPersonエントリを取得
-                let related_persons = get_related_gpersons(&gpersons, email);
+                if email.is_empty() {
+                    continue;
+                }
 
-                // ここでrelated_personsに対して必要な処理を行う
-                for person in related_persons {
-                    println!("G:ユニークなメールアドレス: {}", email);
-                    if let Some(names) = &person.names {
-                        for name in names {
-                            println!(
-                                "対応する名前: {}",
-                                name.display_name.as_ref().unwrap_or(&"不明".to_string())
-                            );
+                // Google Contactsの中でこのメールアドレスを持つ人々
+                let related_gpersons = get_related_gpersons(&gpersons, email);
+
+                let mut source;
+                for gperson in &related_gpersons {
+                    // .addressbookに新規登録するか、Google Contactsから削除するかを入力させる
+                    println!(
+                        "{}",
+                        mod_fluent::get_translation(&bundle, "add-a-or-delete-g-mode")
+                    );
+                    let gnickname = get_gcontact_nickname(gperson);
+                    let gname = get_gcontact_name(gperson);
+                    let gbiography = get_gcontact_biography(gperson);
+                    println!(
+                        "Google Contacts   :{}/{}/{}/{}",
+                        gnickname, gname, email, gbiography
+                    );
+
+                    source = input_select_source(&bundle);
+
+                    // ユーザ入力に従って分岐
+                    match source {
+                        UpdateSource::FromGoogle => {
+                            // Google Contactsから削除する
+                            match remove_related_gperson(&gperson, &service).await {
+                                Ok(()) => {
+                                    println!(
+                                        "{}",
+                                        mod_fluent::get_translation(
+                                            &bundle,
+                                            "update-success-google-contacts"
+                                        )
+                                    );
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "{}: {}",
+                                        mod_fluent::get_translation(
+                                            &bundle,
+                                            "update-fail-google-contacts"
+                                        ),
+                                        e
+                                    );
+                                    std::process::exit(1);
+                                }
+                            }
                         }
-                    }
-                    if let Some(nicknames) = &person.nicknames {
-                        for nickname in nicknames {
-                            println!(
-                                "対応するニックネーム: {}",
-                                nickname.value.as_ref().unwrap_or(&"不明".to_string())
-                            );
+                        UpdateSource::FromAddressBook => {
+                            // .addressbookに追加する
+                            let mut existing_nicknames = Vec::new();
+                            let nickname = generate_nickname(&gname, 1, &mut existing_nicknames);
+                            apeople.push(APerson {
+                                nickname,
+                                name: gname,
+                                email: email.to_owned(),
+                                fcc: "".to_string(),
+                                biography: gbiography,
+                            });
+                            apeople_diarty = true;
                         }
                     }
                 }
@@ -919,7 +1217,7 @@ async fn main() {
                 let apeople_clone = apeople.clone();
                 let related_apeople = get_related_apersons(&apeople_clone, email);
 
-                let mut source = UpdateSource::FromGoogle;
+                let mut source;
                 for aperson in &related_apeople {
                     // Google Contactsに新規登録するか、.addressbookから削除するかを入力させる
                     println!(
@@ -930,31 +1228,8 @@ async fn main() {
                         ".addressbook   :{}/{}/{}/{}",
                         aperson.nickname, aperson.name, aperson.email, aperson.biography
                     );
-                    // ユーザ入力用バッファ
-                    let mut input = String::new();
-                    if let Err(e) = io::stdin().read_line(&mut input) {
-                        // ユーザ入力でエラー発生
-                        eprintln!(
-                            "{}: {}",
-                            mod_fluent::get_translation(&bundle, "input-error"),
-                            e
-                        );
-                        std::process::exit(0);
-                    }
 
-                    // ユーザ入力によりGoogle Contactsと.addressbookの
-                    // どちらのデータを優先するか決める
-                    if (input.trim().to_lowercase() != "g") && (input.trim().to_lowercase() != "a")
-                    {
-                        println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
-                        std::process::exit(0);
-                    } else if input.trim().to_lowercase() == "g" {
-                        // Google Contactsに追加する
-                        source = UpdateSource::FromGoogle;
-                    } else if input.trim().to_lowercase() == "a" {
-                        // .addressbookから削除する
-                        source = UpdateSource::FromAddressBook;
-                    }
+                    source = input_select_source(&bundle);
 
                     // ユーザ入力に従って分岐
                     match source {
@@ -1003,68 +1278,13 @@ async fn main() {
                 let related_persons = get_related_gpersons(&gpersons, email);
                 for person in related_persons {
                     // 名前を取得
-                    let mut gname;
-                    match &person.names {
-                        Some(s) => {
-                            if s.is_empty() {
-                                gname = "".to_string();
-                            } else {
-                                // 名前が複数付いていても最初の1つを使う
-                                gname = s[0].display_name.clone().unwrap_or("".to_string());
-                            }
-                        }
-                        None => {
-                            gname = "".to_string();
-                        }
-                    };
-
-                    if gname.is_empty() {
-                        match &person.organizations {
-                            Some(s) => {
-                                if s.is_empty() {
-                                    gname = "".to_string();
-                                } else {
-                                    // ニックネームが複数付いていても最初の1つを使う
-                                    gname = s[0].name.clone().unwrap_or("".to_string());
-                                }
-                            }
-                            None => {
-                                gname = "".to_string();
-                            }
-                        };
-                    }
+                    let gname = get_gcontact_name(person);
 
                     // ニックネームを取得する
-                    let gnickname;
-                    match &person.nicknames {
-                        Some(s) => {
-                            if s.is_empty() {
-                                gnickname = "".to_string();
-                            } else {
-                                // ニックネームが複数付いていても最初の1つを使う
-                                gnickname = s[0].value.clone().unwrap_or("".to_string());
-                            }
-                        }
-                        None => {
-                            gnickname = "".to_string();
-                        }
-                    };
+                    let gnickname = get_gcontact_nickname(person);
 
                     // メモを取得する
-                    let gbiography;
-                    match &person.biographies {
-                        Some(s) => {
-                            if s.is_empty() {
-                                gbiography = "".to_string();
-                            } else {
-                                // メモが複数付いていても最初の1つを使う
-                                gbiography = s[0].value.clone().unwrap_or("".to_string());
-                            }
-                        }
-                        None => {
-                            gbiography = "".to_string();
-                        }
-                    };
+                    let gbiography = get_gcontact_biography(person);
 
                     // .addressbookに格納されているニックネームはそのまま使わず、
                     // 末尾の数字を取り除き、
@@ -1090,7 +1310,7 @@ async fn main() {
                     }
 
                     // ここまで来たらデータを更新する
-                    let mut source = UpdateSource::FromGoogle;
+                    let source;
 
                     // Google Contactsと.addressbookのどちらを優先するか入力させる
                     println!("{}", mod_fluent::get_translation(&bundle, "update-mode"));
@@ -1099,42 +1319,21 @@ async fn main() {
                         ".addressbook   :{}/{}/{}",
                         aperson.name, aperson.nickname, aperson.biography
                     );
-                    // ユーザ入力用バッファ
-                    let mut input = String::new();
-                    if let Err(e) = io::stdin().read_line(&mut input) {
-                        // ユーザ入力でエラー発生
-                        eprintln!(
-                            "{}: {}",
-                            mod_fluent::get_translation(&bundle, "input-error"),
-                            e
-                        );
-                        std::process::exit(0);
-                    }
 
-                    // ユーザ入力によりGoogle Contactsと.addressbookの
-                    // どちらのデータを優先するか決める
-                    if (input.trim().to_lowercase() != "g") && (input.trim().to_lowercase() != "a")
-                    {
-                        println!("{}", mod_fluent::get_translation(&bundle, "op-cancel"));
-                        std::process::exit(0);
-                    } else if input.trim().to_lowercase() == "g" {
-                        // Google Contactsを優先し、.addressbookを更新する
-                        source = UpdateSource::FromGoogle;
-                    } else if input.trim().to_lowercase() == "a" {
-                        // .addressbookを優先し、Google Contactsを更新する
-                        source = UpdateSource::FromAddressBook;
-                    }
+                    source = input_select_source(&bundle);
 
                     // 既存の人物を更新する
                     match source {
                         UpdateSource::FromGoogle => {
                             // .addressbookを更新する
                             let fcc = aperson.clone().fcc;
+                            let mut existing_nicknames = Vec::new();
+                            let nickname = generate_nickname(&gname, 1, &mut existing_nicknames);
                             let aperson_clone = aperson.clone();
                             // .addressbookから該当する値を消す
                             remove_related_apersons(&mut apeople, &vec![&aperson_clone]);
                             apeople.push(APerson {
-                                nickname: gnickname,
+                                nickname,
                                 name: gname,
                                 email: email.to_owned(),
                                 fcc, // フィールド名と変数名が同じ
