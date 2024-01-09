@@ -291,32 +291,38 @@ fn load_addressbook_data(file_path: &Path) -> Result<Vec<APerson>, Box<dyn std::
     // `APerson` 構造体のベクトルを初期化します。
     let mut persons: Vec<APerson> = Vec::new();
 
-    // 指定されたファイルを開きます。エラーが発生した場合はエラーメッセージを返します。
-    let file = File::open(file_path).map_err(|e| e.to_string())?;
+    // 指定されたファイルを開きます。エラーが発生した場合はエラーを返します。
+    let file = File::open(file_path)?;
 
     // 結合された行を格納するための文字列を初期化します。
     let mut combined_line = String::new();
 
     // ファイルの各行を読み込みます。
     for line in io::BufReader::new(file).lines() {
-        let line = line.map_err(|e| e.to_string())?;
+        let line = line?;
 
-        // 行がタブ文字で終わっている場合は、次の行と結合する必要があります。
+        // .addressbookがエンコード済みで行がタブ文字で終わっている場合は、次の行と結合する必要があります。
+        // 未エンコードならタブ文字で終わっている可能性は良くある
         // biographyが空の場合、タブ文字で終わっている可能性があるので考慮する必要あり
         if line.ends_with('\t') && (combined_line.chars().filter(|&c| c == '\t').count() < 4) {
             // 1つのaperson構造体に含まれる最大のタブ文字は4なので4の場合は除外
             combined_line.push_str(&line);
         } else {
             if !line.starts_with("   ") {
+                // "   "で始まっていない場合は前の行の続きではない
+                // ここで前の行をAPersonに変換し、combine_lineはクリアされる
                 convert_line_to_aperson(&mut persons, &mut combined_line)?;
             }
 
+            // "   "で始まっている場合は前の行の続き
+            // "   "で始まっていない場合は新しい行を開始
             combined_line.push_str(&line);
             convert_line_to_aperson(&mut persons, &mut combined_line)?;
         }
     }
 
-    // ファイルの最後の行がタブ文字で終わっている場合
+    // combined_lineが空でない場合は
+    // ファイルの最後の行がタブ文字で終わっている
     if !combined_line.is_empty() {
         convert_line_to_aperson(&mut persons, &mut combined_line)?;
     }
@@ -655,7 +661,7 @@ fn get_related_apersons<'a>(people: &'a Vec<APerson>, email_to_find: &str) -> Ve
 /// # 引数
 /// * `apeople` - `APerson` オブジェクトのベクターへの可変参照。
 /// * `related_apeople` - 削除する `APerson` オブジェクトの参照のベクター。
-fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec<&'a APerson>) {
+fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec<APerson>) {
     // `apeople` ベクターから `related_apeople` に含まれるオブジェクトを削除
     apeople.retain(|ap|
         // `related_apeople` に含まれていない `APerson` オブジェクトだけを保持
@@ -734,49 +740,28 @@ fn get_gpersons_from_aperson(gpersons: &Vec<Person>, aperson: &APerson) -> Optio
 /// # 戻り値
 /// `String` - 取得した名前。名前または所属組織名が存在しない場合は空文字列。
 fn get_gcontact_name(person: &Person) -> String {
-    // 名前を格納する変数を初期化
-    let mut gname;
-
     // Personオブジェクトのnamesフィールドを確認し、名前が存在するかチェック
-    match &person.names {
-        Some(names) => {
-            // 名前が存在する場合
-            if names.is_empty() {
-                // 名前のリストが空の場合、空文字列を代入
-                gname = "".to_string();
-            } else {
-                // 名前のリストが空でない場合、最初の名前を使用
-                gname = names[0].display_name.clone().unwrap_or_default();
+    if let Some(names) = &person.names {
+        // 名前のリストが空でない場合、最初の名前を使用
+        if let Some(name) = names.get(0) {
+            if let Some(display_name) = &name.display_name {
+                return display_name.clone();
             }
         }
-        None => {
-            // 名前が存在しない場合、空文字列を代入
-            gname = "".to_string();
-        }
-    };
-
-    // 名前が空の場合、Personオブジェクトのorganizationsフィールドを確認
-    if gname.is_empty() {
-        match &person.organizations {
-            Some(organizations) => {
-                // 所属組織が存在する場合
-                if organizations.is_empty() {
-                    // 所属組織のリストが空の場合、空文字列を代入
-                    gname = "".to_string();
-                } else {
-                    // 所属組織のリストが空でない場合、最初の所属組織名を使用
-                    gname = organizations[0].name.clone().unwrap_or_default();
-                }
-            }
-            None => {
-                // 所属組織が存在しない場合、空文字列を代入
-                gname = "".to_string();
-            }
-        };
     }
 
-    // 取得した名前または所属組織名を返す
-    gname
+    // 名前が空の場合、Personオブジェクトのorganizationsフィールドを確認
+    if let Some(organizations) = &person.organizations {
+        // 所属組織が存在する場合
+        if let Some(organization) = organizations.get(0) {
+            if let Some(name) = &organization.name {
+                return name.clone();
+            }
+        }
+    }
+
+    // 名前が見つからない場合、空文字列を返す
+    "".to_string()
 }
 
 /// GoogleのPersonオブジェクトからニックネームを取得する関数。
@@ -791,29 +776,17 @@ fn get_gcontact_name(person: &Person) -> String {
 /// # 戻り値
 /// `String` - 取得したニックネーム。ニックネームが存在しない場合は空文字列。
 fn get_gcontact_nickname(person: &Person) -> String {
-    // ニックネームを格納する変数を初期化
-    let gnickname;
-
-    // Personオブジェクトのnicknamesフィールドを確認し、ニックネームが存在するかチェック
-    match &person.nicknames {
-        Some(nicknames) => {
-            // ニックネームが存在する場合
-            if nicknames.is_empty() {
-                // ニックネームのリストが空の場合、空文字列を代入
-                gnickname = "".to_string();
-            } else {
-                // ニックネームのリストが空でない場合、最初のニックネームを使用
-                gnickname = nicknames[0].value.clone().unwrap_or_default();
+    if let Some(nicknames) = &person.nicknames {
+        // ニックネームのリストが空でない場合、最初の名前を使用
+        if let Some(nickname) = nicknames.get(0) {
+            if let Some(value) = &nickname.value {
+                return value.clone();
             }
         }
-        None => {
-            // ニックネームが存在しない場合、空文字列を代入
-            gnickname = "".to_string();
-        }
-    };
+    }
 
-    // 取得したニックネームを返す
-    gnickname
+    // ニックネームが見付からない場合は空文字列を返す
+    "".to_string()
 }
 
 /// GoogleのPersonオブジェクトからバイオグラフィーを取得する関数。
@@ -828,29 +801,17 @@ fn get_gcontact_nickname(person: &Person) -> String {
 /// # 戻り値
 /// `String` - 取得したバイオグラフィー。バイオグラフィーが存在しない場合は空文字列。
 fn get_gcontact_biography(person: &Person) -> String {
-    // バイオグラフィーを格納する変数を初期化
-    let gbiography;
-
-    // Personオブジェクトのbiographiesフィールドを確認し、バイオグラフィーが存在するかチェック
-    match &person.biographies {
-        Some(biographies) => {
-            // バイオグラフィーが存在する場合
-            if biographies.is_empty() {
-                // バイオグラフィーのリストが空の場合、空文字列を代入
-                gbiography = "".to_string();
-            } else {
-                // バイオグラフィーのリストが空でない場合、最初のバイオグラフィーを使用
-                gbiography = biographies[0].value.clone().unwrap_or_default();
+    if let Some(biographies) = &person.biographies {
+        // バイオグラフィのリストが空でない場合、最初の名前を使用
+        if let Some(biography) = biographies.get(0) {
+            if let Some(value) = &biography.value {
+                return value.clone();
             }
         }
-        None => {
-            // バイオグラフィーが存在しない場合、空文字列を代入
-            gbiography = "".to_string();
-        }
-    };
+    }
 
-    // 取得したバイオグラフィーを返す
-    gbiography
+    // バイオグラフィが見付からない場合は空文字列を返す
+    "".to_string()
 }
 
 /// ユーザー入力に基づいてデータ更新のソースを選択する関数。
@@ -909,6 +870,7 @@ async fn main() {
     // コマンドライン引数を取得
     let args: Vec<String> = env::args().collect();
 
+    // 動作モード
     let sel;
 
     // --help オプションのチェック
@@ -1023,10 +985,16 @@ async fn main() {
                     let mut existing_nicknames = Vec::new();
 
                     // Google Contactsから各人物の名前と会社を取得する
-                    let person_clone = person.clone();
-                    let names = person_clone.names.unwrap_or_else(Vec::new);
-                    let organizations = person_clone.organizations.unwrap_or_else(Vec::new);
-                    let emails = person_clone.email_addresses.unwrap_or_else(Vec::new);
+                    let default_names = Vec::new();
+                    let default_organizations = Vec::new();
+                    let default_emails = Vec::new();
+
+                    let names = person.names.as_ref().unwrap_or(&default_names);
+                    let organizations = person
+                        .organizations
+                        .as_ref()
+                        .unwrap_or(&default_organizations);
+                    let emails = person.email_addresses.as_ref().unwrap_or(&default_emails);
 
                     // 名前が存在する場合のみ処理
                     if !names.is_empty() || !organizations.is_empty() {
@@ -1046,12 +1014,17 @@ async fn main() {
 
                         // 各メールアドレスにニックネームを割り当ててCSVに書き込む
                         for email in emails {
-                            let email_address = email.value.unwrap_or_default();
+                            let email_default = "".to_string();
+                            let email_address = email.value.as_ref().unwrap_or(&email_default);
                             let nickname =
                                 generate_nickname(&name, email_count, &mut existing_nicknames);
-                            if let Err(e) =
-                                writer.write_record(&[&nickname, &name, &email_address, "", &memo])
-                            {
+                            if let Err(e) = writer.write_record(&[
+                                &nickname,
+                                &name,
+                                &email_address,
+                                &"".to_string(),
+                                &memo,
+                            ]) {
                                 eprintln!(
                                     "{}: {}",
                                     mod_fluent::get_translation(&bundle, "write-error"),
@@ -1109,12 +1082,9 @@ async fn main() {
 
             // .addressbookのメールアドレスと比較するためのHashSet
             let mut gperson_emails: HashSet<String> = HashSet::new();
-            for gperson in gpersons.clone() {
+            for gperson in &gpersons {
                 // gpersonのメールアドレスのvecを取得
-                let emails = match gperson.email_addresses {
-                    Some(s) => s,
-                    None => continue,
-                };
+                let emails = gperson.email_addresses.clone().unwrap_or(Vec::new());
 
                 // メールアドレスのvecからメールアドレスを取得
                 for email in emails {
@@ -1136,6 +1106,10 @@ async fn main() {
             let unique_to_apeople = aperson_emails.difference(&gperson_emails);
             // 両方に存在するメールアドレスを特定
             let common_emails = aperson_emails.intersection(&gperson_emails);
+
+            // 追加/削除するAPersonを保持しておく
+            let mut related_remove_apeople = Vec::new();
+            let mut related_add_apeople = Vec::new();
 
             for email in unique_to_gpersons {
                 // このメールアドレスはGoogle Contactsにのみ存在し、.addressbookには存在しない。
@@ -1161,6 +1135,7 @@ async fn main() {
                         gnickname, gname, email, gbiography
                     );
 
+                    // ソース選択の入力
                     source = input_select_source(&bundle);
 
                     // ユーザ入力に従って分岐
@@ -1194,13 +1169,15 @@ async fn main() {
                             // .addressbookに追加する
                             let mut existing_nicknames = Vec::new();
                             let nickname = generate_nickname(&gname, 1, &mut existing_nicknames);
-                            apeople.push(APerson {
-                                nickname,
-                                name: gname,
+                            // .addressbookに新しく追加する
+                            related_add_apeople.push(APerson {
+                                nickname: nickname.to_owned(),
+                                name: gname.to_owned(),
                                 email: email.to_owned(),
                                 fcc: "".to_string(),
-                                biography: gbiography,
+                                biography: gbiography.to_owned(),
                             });
+
                             apeople_diarty = true;
                         }
                     }
@@ -1214,10 +1191,7 @@ async fn main() {
                 }
 
                 // このメールアドレスを持つ人物を.addressbookから探す
-                // remove_related_apersons関数との兼ね合いでapeople.clone()を渡す
-                let apeople_clone = apeople.clone();
-                let related_apeople = get_related_apersons(&apeople_clone, email);
-
+                let related_apeople = get_related_apersons(&apeople, email);
                 let mut source;
                 for aperson in &related_apeople {
                     // Google Contactsに新規登録するか、.addressbookから削除するかを入力させる
@@ -1230,6 +1204,7 @@ async fn main() {
                         aperson.nickname, aperson.name, aperson.email, aperson.biography
                     );
 
+                    // ソース選択の入力
                     source = input_select_source(&bundle);
 
                     // ユーザ入力に従って分岐
@@ -1260,7 +1235,15 @@ async fn main() {
                         }
                         UpdateSource::FromAddressBook => {
                             // .addressbookから削除する
-                            remove_related_apersons(&mut apeople, &related_apeople);
+                            // 関連するAPersonオブジェクトのキーを収集
+                            related_remove_apeople.push(APerson {
+                                nickname: aperson.nickname.to_owned(),
+                                name: aperson.name.to_owned(),
+                                email: aperson.email.to_owned(),
+                                fcc: aperson.fcc.to_owned(),
+                                biography: aperson.biography.to_owned(),
+                            });
+
                             apeople_diarty = true;
                         }
                     }
@@ -1269,8 +1252,7 @@ async fn main() {
 
             for email in common_emails {
                 // このメールアドレスは両者共通に存在する
-                let apeople_clone = apeople.clone();
-                let aperson = match apeople_clone.iter().find(|&ap| &ap.email == email) {
+                let aperson = match apeople.iter().find(|&ap| &ap.email == email) {
                     Some(s) => s,
                     None => continue,
                 };
@@ -1290,20 +1272,20 @@ async fn main() {
                     // .addressbookに格納されているニックネームはそのまま使わず、
                     // 末尾の数字を取り除き、
                     // generate_nickname()で作ったニックネームと同じ場合はGoogle Contactsと同じとする
-                    let mut anickname = split_string_and_number(&aperson.nickname).0;
-                    let last_name_part = aperson
+                    let mut anickname = &split_string_and_number(&aperson.nickname).0;
+                    let last_name_part = &aperson
                         .name
                         .split_whitespace()
                         .last()
                         .unwrap_or("Unknown")
                         .to_string();
                     if anickname == last_name_part {
-                        anickname = gnickname.clone();
+                        anickname = &gnickname;
                     }
 
                     if aperson.name == gname {
                         // メールアドレスと名前が同じ
-                        if (anickname == gnickname) && (aperson.biography == gbiography) {
+                        if (anickname == &gnickname) && (aperson.biography == gbiography) {
                             // ニックネームもメモも同じ
                             // 他のpersonのループを続ける
                             continue;
@@ -1327,19 +1309,27 @@ async fn main() {
                     match source {
                         UpdateSource::FromGoogle => {
                             // .addressbookを更新する
-                            let fcc = aperson.clone().fcc;
                             let mut existing_nicknames = Vec::new();
                             let nickname = generate_nickname(&gname, 1, &mut existing_nicknames);
-                            let aperson_clone = aperson.clone();
+                            // related_remove_apeopleとrelated_add_apeopleにapersonを渡すと
+                            // apeopleが不変の参照と可変の参照の同時使用によりエラーになる
                             // .addressbookから該当する値を消す
-                            remove_related_apersons(&mut apeople, &vec![&aperson_clone]);
-                            apeople.push(APerson {
-                                nickname,
-                                name: gname,
-                                email: email.to_owned(),
-                                fcc, // フィールド名と変数名が同じ
-                                biography: gbiography,
+                            related_remove_apeople.push(APerson {
+                                nickname: aperson.nickname.to_owned(),
+                                name: aperson.name.to_owned(),
+                                email: aperson.email.to_owned(),
+                                fcc: aperson.fcc.to_owned(),
+                                biography: aperson.biography.to_owned(),
                             });
+                            // .addressbookに新しく追加する
+                            related_add_apeople.push(APerson {
+                                nickname: nickname.to_owned(),
+                                name: gname.to_owned(),
+                                email: email.to_owned(),
+                                fcc: aperson.fcc.to_owned(), // 元のfccと同じ
+                                biography: gbiography.to_owned(),
+                            });
+
                             apeople_diarty = true;
                         }
                         UpdateSource::FromAddressBook => {
@@ -1372,6 +1362,13 @@ async fn main() {
             }
 
             if apeople_diarty {
+                // apeopleから削除フラグの立っている人々を削除する
+                remove_related_apersons(&mut apeople, &related_remove_apeople);
+                // apeopleから追加フラグの立っている人々を追加する
+                if !related_add_apeople.is_empty() {
+                    apeople.append(&mut related_add_apeople);
+                }
+
                 // apeopleを.addressbookに書き込む
                 // CSVファイルライター（タブ区切り）を初期化
                 let mut writer = WriterBuilder::new()
@@ -1387,8 +1384,7 @@ async fn main() {
                     });
 
                 // 各apersonをCSVに書き込む
-                let apeople_clone = apeople.clone();
-                for aperson in apeople_clone {
+                for aperson in &apeople {
                     if !aperson.email.is_empty() {
                         if let Err(e) = writer.write_record(&[
                             &aperson.nickname,
