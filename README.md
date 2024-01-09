@@ -40,16 +40,16 @@ Google Cloud Platformでの作業は、課金が発生する可能性がある�
 client_secret.jsonに含まれる情報は機密情報です。安全に管理し、公開リポジトリにアップロードしないようにしてください。
 ### ビルド方法
 ```
-$ cargo build --release
+cargo build --release
 ```
 ## 使用方法(バージョン0.3.0以上)
 ### ~/.addressbookをGoogle Contactsのデータで初期化する
 ```
-$ ./target/release/gcontacts init
+./target/release/gcontacts init
 ```
 ### ~/.addressbookをGoogle Contactsと同期する
 ```
-$ ./target/release/gcontacts sync
+./target/release/gcontacts sync
 ```
 ## ライセンス
 このプロジェクトはApache License 2.0の下でライセンスされています。詳細はLICENSEファイルをご覧ください。
