@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Google APIへのOAuth2認証を行う
-
-use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod, read_application_secret, authenticator::Authenticator}; // OAuth2認証のためのモジュール
 use hyper::client::{Client, HttpConnector}; // HTTPクライアント操作用
-use hyper_rustls::HttpsConnector; // HTTPSサポート用
+use hyper_rustls::HttpsConnector;
+/// Google APIへのOAuth2認証を行う
+use yup_oauth2::{
+    authenticator::Authenticator, read_application_secret, InstalledFlowAuthenticator,
+    InstalledFlowReturnMethod,
+}; // OAuth2認証のためのモジュール // HTTPSサポート用
 
 /// Google APIの認証プロセスを実行し、認証情報を取得する非同期関数。
 ///
@@ -29,7 +31,8 @@ use hyper_rustls::HttpsConnector; // HTTPSサポート用
 /// # 戻り値
 /// 成功した場合は`Result`型で`Authenticator<HttpsConnector<HttpConnector>>`を返し、
 /// エラーが発生した場合は`Box<dyn std::error::Error>`を返します。
-pub async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
+pub async fn get_auth(
+) -> Result<Authenticator<HttpsConnector<HttpConnector>>, Box<dyn std::error::Error>> {
     // ユーザーのホームディレクトリを取得
     let home_dir = dirs::home_dir().expect("Home directory not found");
     // Rustプロジェクトの名前を動的に取得
@@ -57,10 +60,9 @@ pub async fn get_auth() -> Result<Authenticator<HttpsConnector<HttpConnector>>, 
         Ok(s) => s,
         // 読み込み失敗の場合、エラーメッセージを表示してエラーを返す
         Err(e) => {
-           eprintln!("Failed to open {}: {}", secret_file_path.display(), e);
-           Err(e)
-        }?
-        // `?` 演算子は`Result`型から`Ok`の値を抽出し、`Err`の場合は呼び出し元の関数にエラーを返す
+            eprintln!("Failed to open {}: {}", secret_file_path.display(), e);
+            Err(e)
+        }?, // `?` 演算子は`Result`型から`Ok`の値を抽出し、`Err`の場合は呼び出し元の関数にエラーを返す
     };
 
     // HTTPS対応のHTTPクライアントを構築
