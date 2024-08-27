@@ -1,5 +1,7 @@
 # locales/ja-JP.ftl
 app-description = このアプリケーションはGoogle People APIを使用して連絡先情報を取得し、ユーザーのホームディレクトリにAlpine Email Programのアドレス帳形式でエクスポートします。
+app-usage-init = Google Contactsのデータから$HOME/.addressbookを作成する
+app-usage-sync = Google Contactsのデータと$HOME/.addressbookを同期する
 export-complete = アドレス帳がホームディレクトリにエクスポートされました。
 flush-error = アドレス帳への書き込みが完了できませんでした。
 write-error = アドレス帳への書き込みに失敗しました。

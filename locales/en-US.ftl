@@ -1,5 +1,7 @@
 # locales/en-US.ftl
 app-description = This application retrieves contact information using Google People API, and exports it in the format of Alpine Email Program's AddressBook to the user's home directory.
+app-usage-init = Create $HOME/.addressbook using Google Contacts data
+app-usage-sync = Sync $HOME/.addressbook with Google Contacts data
 export-complete = The address book has been exported to the home directory.
 flush-error = Failed to complete writing to the address book.
 write-error = Failed to write to the address book.

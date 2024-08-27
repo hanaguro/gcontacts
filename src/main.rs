@@ -76,6 +76,10 @@ fn print_help(bundle: &FluentBundle<FluentResource, IntlLangMemoizer>) {
     );
     // 追加の詳細説明や使用方法のためのプレースホルダー
     // ここに他の詳細な説明や使用方法を記述する
+    println!("\t{} init", env!("CARGO_PKG_NAME"));
+    println!("\t{}\n", mod_fluent::get_translation(bundle, "app-usage-init"));
+    println!("\t{} sync", env!("CARGO_PKG_NAME"));
+    println!("\t{}\n", mod_fluent::get_translation(bundle, "app-usage-sync"));
 }
 
 /// 文字列内で最初に数字が現れる部分を見つけ、文字列部分と数値部分に分割する。
