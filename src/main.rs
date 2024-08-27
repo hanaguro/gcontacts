@@ -661,7 +661,7 @@ fn get_related_apersons<'a>(people: &'a Vec<APerson>, email_to_find: &str) -> Ve
 /// # 引数
 /// * `apeople` - `APerson` オブジェクトのベクターへの可変参照。
 /// * `related_apeople` - 削除する `APerson` オブジェクトの参照のベクター。
-fn remove_related_apersons<'a>(apeople: &mut Vec<APerson>, related_apeople: &Vec<APerson>) {
+fn remove_related_apersons(apeople: &mut Vec<APerson>, related_apeople: &Vec<APerson>) {
     // `apeople` ベクターから `related_apeople` に含まれるオブジェクトを削除
     apeople.retain(|ap|
         // `related_apeople` に含まれていない `APerson` オブジェクトだけを保持
@@ -777,7 +777,7 @@ fn get_gcontact_name(person: &Person) -> String {
 /// `String` - 取得したニックネーム。ニックネームが存在しない場合は空文字列。
 fn get_gcontact_nickname(person: &Person) -> String {
     if let Some(nicknames) = &person.nicknames {
-        // ニックネームのリストが空でない場合、最初の名前を使用
+        // ニックネームのリストが空でない場合、最初のニックネームを使用
         if let Some(nickname) = nicknames.get(0) {
             if let Some(value) = &nickname.value {
                 return value.clone();
@@ -802,7 +802,7 @@ fn get_gcontact_nickname(person: &Person) -> String {
 /// `String` - 取得したバイオグラフィー。バイオグラフィーが存在しない場合は空文字列。
 fn get_gcontact_biography(person: &Person) -> String {
     if let Some(biographies) = &person.biographies {
-        // バイオグラフィのリストが空でない場合、最初の名前を使用
+        // バイオグラフィのリストが空でない場合、最初のバイオグラフィを使用
         if let Some(biography) = biographies.get(0) {
             if let Some(value) = &biography.value {
                 return value.clone();
